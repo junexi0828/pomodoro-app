@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Star, MapPin, Clock, Users, Car, ChevronDown, Calendar } from 'lucide-react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchRestaurantById, Restaurant } from '../utils/api';
-import NaverMap from '../components/NaverMap';
+import { fetchRestaurantById, Restaurant } from '../../utils/utils/api';
+import NaverMap from '../../components/components/NaverMap';
 import axios from 'axios';
 
 function RestaurantPage() {

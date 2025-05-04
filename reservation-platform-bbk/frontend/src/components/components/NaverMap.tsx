@@ -13,14 +13,18 @@ interface Marker {
 }
 
 interface Props {
+  latitude?: number;
+  longitude?: number;
   center?: {
     lat: number;
     lng: number;
-  }; // 🔹 지도 중심 위치 (선택적)
-  markers: Marker[]; 
+  };
+  markers: Marker[];
 }
 
-function NaverMap({ center, markers }: Props) {
+function NaverMap({ latitude, longitude, center, markers }: Props) {
+  // latitude/longitude가 있으면 center로 변환
+  const mapCenter = center || (latitude && longitude ? { lat: latitude, lng: longitude } : markers[0]);
   useEffect(() => {
     const timer = setInterval(() => {
       const mapElement = document.getElementById('map');
@@ -32,9 +36,6 @@ function NaverMap({ center, markers }: Props) {
         mapElement
       ) {
         clearInterval(timer);
-
-        // 중심 위치는 center가 있으면 그걸 쓰고, 없으면 첫 번째 마커의 위치
-        const mapCenter = center || markers[0];
 
         const map = new window.naver.maps.Map(mapElement, {
           center: new window.naver.maps.LatLng(mapCenter.lat, mapCenter.lng),
@@ -61,7 +62,7 @@ function NaverMap({ center, markers }: Props) {
     }, 300);
 
     return () => clearInterval(timer);
-  }, [center, markers]);
+  }, [mapCenter, markers]);
 
   return <div id="map" style={{ width: '100%', height: '400px' }} />;
 }

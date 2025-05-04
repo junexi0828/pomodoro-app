@@ -2,14 +2,14 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { AuthProvider } from './contexts/AuthContext';
-import SignupForm from './components/SignupForm';
-import LoginForm from './components/LoginForm';
+import { AuthProvider } from './context/contexts/AuthContext';
+import SignupForm from './components/components/SignupForm';
+import LoginForm from './components/components/LoginForm';
 
-import Layout from './components/Layout';
-import HomePage from './pages/HomePage';
-import RestaurantPage from './pages/RestaurantPage';
-import LoginPage from './pages/LoginPage';
+import Layout from './components/components/Layout';
+import HomePage from './pages/pages/HomePage';
+import RestaurantPage from './pages/pages/RestaurantPage';
+import LoginPage from './pages/pages/LoginPage';
 
 function App() {
   return (

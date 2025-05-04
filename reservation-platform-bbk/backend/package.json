@@ -2,10 +2,10 @@
   "name": "reservation-platform-backend",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "apps/auth/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node apps/auth/index.js",
+    "dev": "nodemon apps/auth/index.js"
   },
   "dependencies": {
     "axios": "^1.6.7",

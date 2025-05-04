@@ -15,9 +15,15 @@ export interface Restaurant {
     RegistrationDate: string;
     CommissionFee: number;
     ImageURL?: string;
+    AddressDetail?: string;
+    Description?: string;
+    PhoneNumber?: string;
+    OpeningHours?: string;
+    Services?: string;
+    Website?: string;
   }
   
-  const API_BASE = 'http://223.130.155.88:3000/api';
+  const API_BASE = import.meta.env.VITE_API_URL || '/api';
   
   export const fetchRestaurants = async (): Promise<Restaurant[]> => {
     const res = await fetch(`${API_BASE}/restaurants`);
