@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Star, MapPin, ChevronRight, Phone, Mail, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { fetchRestaurants, Restaurant } from '../utils/api';
-import NaverMap from "../components/NaverMap";
+import { fetchRestaurants, Restaurant } from "../../utils/utils/api";
+import NaverMap from "../../components/components/NaverMap";
 
 function HomePage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
