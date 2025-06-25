@@ -1,0 +1,8 @@
+장,주요 함수,관련 모듈
+2장: Python 기초,"print(), input(), if, else, while, for, break, def(), return",Python 기본 내장
+3장: Pandas & Numpy,"np.array(), .shape, np.mean(), np.std(), np.dot(), np.transpose(), np.eye(), np.linalg.inv(), np.zeros(), np.ones(), np.full()",numpy
+4장: 기술적 분석(대표값),"np.mean(), np.median(), np.std(), np.var(), len(), sum(), max(), min()",numpy
+5장: 데이터 시각화,"plt.plot(), plt.bar(), plt.hist(), plt.boxplot(), plt.scatter(), plt.show()",matplotlib.pyplot
+6장: 예측 분석 기초,"pd.read_csv(), .head(), .tail(), .info(), .describe(), df['col'], df.loc[], df.iloc[], df['new'] = ..., df.to_csv()",pandas
+7장: 모델 성능 지표,"confusion_matrix(), accuracy_score(), precision_score(), recall_score(), f1_score(), roc_curve(), auc()",sklearn.metrics
+8장: 의사결정나무,"DecisionTreeClassifier(), .fit(), .predict(), plot_tree()","sklearn.tree, matplotlib"
