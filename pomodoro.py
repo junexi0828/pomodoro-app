@@ -32,6 +32,945 @@ import math
 import random
 
 
+class StreakAnimation:
+    """연속 달성 시 짜릿하고 멋진 애니메이션을 제공하는 클래스"""
+
+    def __init__(self, parent, width=400, height=300):
+        self.parent = parent
+        self.width = width
+        self.height = height
+        self.is_running = False
+        self.animation_id = None
+        self.streak_count = 0
+        self.animation_type = None
+
+        # 애니메이션 지속 시간 상수 (밀리초)
+        # 이 값을 변경하면 모든 애니메이션의 지속 시간이 동시에 변경됩니다
+        self.ANIMATION_DURATION = 3000  # 3초
+
+        # 애니메이션 프레임 생성 (최상위로 표시)
+        self.frame = tk.Toplevel(parent)
+        self.frame.title("연속 달성 애니메이션")
+        self.frame.geometry(f"{width}x{height}")
+        self.frame.configure(bg="#000000")
+        self.frame.overrideredirect(True)  # 타이틀바 제거
+
+        # 창을 화면 중앙에 배치
+        self.frame.update_idletasks()
+        x = (self.frame.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.frame.winfo_screenheight() // 2) - (height // 2)
+        self.frame.geometry(f"+{x}+{y}")
+
+        # 항상 최상위로 표시
+        self.frame.attributes("-topmost", True)
+
+        # 초기에는 숨겨져 있음
+        self.frame.withdraw()
+
+        self.canvas = tk.Canvas(
+            self.frame, width=width, height=height, bg="#000000", highlightthickness=0
+        )
+        self.canvas.pack(expand=True, fill="both")
+
+        # 애니메이션 변수들
+        self.angle = 0
+        self.scale = 1.0
+        self.particles = []
+        self.explosion_particles = []
+        self.lightning_points = []
+        self.firework_particles = []
+        self.rainbow_offset = 0
+        self.glow_intensity = 0
+        self.glow_direction = 1
+
+    def show_streak_animation(self, streak_count):
+        """연속 달성 애니메이션 표시"""
+        self.streak_count = streak_count
+        self.frame.deiconify()  # 창을 보이게 하기
+        self.is_running = True
+
+        # 창을 최상위로 가져오기
+        self.frame.lift()
+        self.frame.focus_force()
+
+        # 연속 달성 수에 따른 애니메이션 타입 결정 (1-8회)
+        if streak_count == 1:
+            self.animation_type = "first"  # 첫 번째 달성
+        elif streak_count == 2:
+            self.animation_type = "second"  # 두 번째 달성
+        elif streak_count == 3:
+            self.animation_type = "third"  # 세 번째 달성
+        elif streak_count == 4:
+            self.animation_type = "fourth"  # 네 번째 달성
+        elif streak_count == 5:
+            self.animation_type = "fifth"  # 다섯 번째 달성
+        elif streak_count == 6:
+            self.animation_type = "sixth"  # 여섯 번째 달성
+        elif streak_count == 7:
+            self.animation_type = "seventh"  # 일곱 번째 달성
+        elif streak_count == 8:
+            self.animation_type = "eighth"  # 여덟 번째 달성 (최고 단계)
+        else:
+            self.animation_type = "first"  # 기본값
+
+        self._animate()
+
+    def hide(self):
+        """애니메이션 숨기기"""
+        self.is_running = False
+        if self.animation_id:
+            self.parent.after_cancel(self.animation_id)
+        self.frame.withdraw()  # 창을 숨기기
+
+    def _animate(self):
+        """메인 애니메이션 루프"""
+        if not self.is_running:
+            return
+
+        self.canvas.delete("all")
+
+        # 애니메이션 타입별 다른 효과 실행 (1-8회)
+        if self.animation_type == "first":
+            self._animate_first()
+        elif self.animation_type == "second":
+            self._animate_second()
+        elif self.animation_type == "third":
+            self._animate_third()
+        elif self.animation_type == "fourth":
+            self._animate_fourth()
+        elif self.animation_type == "fifth":
+            self._animate_fifth()
+        elif self.animation_type == "sixth":
+            self._animate_sixth()
+        elif self.animation_type == "seventh":
+            self._animate_seventh()
+        elif self.animation_type == "eighth":
+            self._animate_eighth()
+        else:
+            self._animate_first()
+
+        # 애니메이션 변수 업데이트
+        self.angle += 8
+        self.scale += 0.02 * self.glow_direction
+        if self.scale > 1.3 or self.scale < 0.7:
+            self.glow_direction *= -1
+        self.rainbow_offset += 0.15
+        self.glow_intensity = (self.glow_intensity + 0.1) % (2 * math.pi)
+
+        # 다음 프레임 예약 (더 빠른 애니메이션)
+        self.animation_id = self.parent.after(30, self._animate)
+
+    def _animate_first(self):
+        """첫 번째 달성 애니메이션 - 별빛 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 회전하는 별들
+        for i in range(3):
+            angle = self.angle + i * 120
+            x = center_x + 60 * math.cos(math.radians(angle))
+            y = center_y + 60 * math.sin(math.radians(angle))
+            self._draw_star(x, y, 12, "#FFD700", angle)
+
+        # 2. 중앙 텍스트
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 20, "bold"),
+            fill="#FFD700",
+        )
+
+        # 3. 펄스 효과
+        for i in range(2):
+            radius = 50 * self.scale * (1 - i * 0.4)
+            alpha = 1 - i * 0.4
+            color = f"#{int(255*alpha):02x}{int(215*alpha):02x}{int(0*alpha):02x}"
+            self.canvas.create_oval(
+                center_x - radius,
+                center_y - radius,
+                center_x + radius,
+                center_y + radius,
+                outline=color,
+                width=2,
+                dash=(5, 5),
+            )
+
+    def _animate_second(self):
+        """두 번째 달성 애니메이션 - 번개 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 번개 효과
+        self._draw_lightning(center_x, center_y)
+
+        # 2. 회전하는 화살표들
+        for i in range(4):
+            angle = self.angle + i * 90
+            x = center_x + 80 * math.cos(math.radians(angle))
+            y = center_y + 80 * math.sin(math.radians(angle))
+            self._draw_arrow(x, y, 18, "#00FFFF", angle)
+
+        # 3. 중앙 텍스트 (글로우 효과)
+        glow_color = f"#{int(0):02x}{int(255*abs(math.sin(self.glow_intensity))):02x}{int(255):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 22, "bold"),
+            fill=glow_color,
+        )
+
+        # 4. 에너지 파장
+        for i in range(3):
+            radius = 70 * self.scale * (1 - i * 0.3)
+            color = f"#{int(0):02x}{int(255*abs(math.sin(self.glow_intensity + i))):02x}{int(255):02x}"
+            self.canvas.create_oval(
+                center_x - radius,
+                center_y - radius,
+                center_x + radius,
+                center_y + radius,
+                outline=color,
+                width=2,
+            )
+
+    def _animate_third(self):
+        """세 번째 달성 애니메이션 - 폭발 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 폭발 효과
+        self._draw_explosion(center_x, center_y)
+
+        # 2. 회전하는 마법진
+        self._draw_magic_circle(center_x, center_y)
+
+        # 3. 중앙 텍스트 (마법 효과)
+        magic_color = f"#{int(255*abs(math.sin(self.glow_intensity))):02x}{int(0):02x}{int(255):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 24, "bold"),
+            fill=magic_color,
+        )
+
+        # 4. 마법 파티클
+        self._update_magic_particles()
+
+        # 5. 레이저 빔 효과
+        for i in range(4):
+            angle = self.angle + i * 90
+            end_x = center_x + 120 * math.cos(math.radians(angle))
+            end_y = center_y + 120 * math.sin(math.radians(angle))
+            self.canvas.create_line(
+                center_x, center_y, end_x, end_y, fill="#FF00FF", width=2, dash=(8, 4)
+            )
+
+    def _animate_fourth(self):
+        """네 번째 달성 애니메이션 - 드래곤 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 드래곤 효과
+        self._draw_dragon(center_x, center_y)
+
+        # 2. 화염 효과
+        self._draw_fire_effect(center_x, center_y)
+
+        # 3. 중앙 텍스트 (드래곤 글로우)
+        dragon_color = f"#{int(255):02x}{int(100*abs(math.sin(self.glow_intensity))):02x}{int(0):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 26, "bold"),
+            fill=dragon_color,
+        )
+
+        # 4. 화염 파티클
+        self._update_fire_particles()
+
+        # 5. 용의 숨결 효과
+        for i in range(5):
+            angle = self.angle + i * 72
+            start_x = center_x + 150 * math.cos(math.radians(angle))
+            start_y = center_y + 150 * math.sin(math.radians(angle))
+            end_x = start_x + 80 * math.cos(math.radians(angle + 20))
+            end_y = start_y + 80 * math.sin(math.radians(angle + 20))
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#FF4500", width=3
+            )
+
+    def _animate_fifth(self):
+        """다섯 번째 달성 애니메이션 - 상어 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 상어 효과
+        self._draw_shark(center_x, center_y)
+
+        # 2. 파도 효과
+        self._draw_wave_effect(center_x, center_y)
+
+        # 3. 중앙 텍스트 (상어 글로우)
+        shark_color = f"#{int(0):02x}{int(150*abs(math.sin(self.glow_intensity))):02x}{int(255):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 28, "bold"),
+            fill=shark_color,
+        )
+
+        # 4. 물 파티클
+        self._update_water_particles()
+
+        # 5. 상어의 물기 효과
+        for i in range(6):
+            angle = self.angle + i * 60
+            start_x = center_x + 160 * math.cos(math.radians(angle))
+            start_y = center_y + 160 * math.sin(math.radians(angle))
+            end_x = start_x + 90 * math.cos(math.radians(angle + 15))
+            end_y = start_y + 90 * math.sin(math.radians(angle + 15))
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#00CED1", width=2
+            )
+
+        # 6. 신의 손길 효과
+        self._draw_divine_touch(center_x, center_y)
+
+        # 7. 무지개 빛 효과
+        self._draw_rainbow_aura(center_x, center_y)
+
+    def _animate_sixth(self):
+        """여섯 번째 달성 애니메이션 - 총쏘기 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 총알 효과
+        self._draw_bullet_effect(center_x, center_y)
+
+        # 2. 총구 화염
+        self._draw_muzzle_flash(center_x, center_y)
+
+        # 3. 중앙 텍스트 (총알 글로우)
+        bullet_color = f"#{int(255):02x}{int(255*abs(math.sin(self.glow_intensity))):02x}{int(0):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 30, "bold"),
+            fill=bullet_color,
+        )
+
+        # 4. 총알 궤적
+        for i in range(7):
+            angle = self.angle + i * 51.4
+            start_x = center_x + 180 * math.cos(math.radians(angle))
+            start_y = center_y + 180 * math.sin(math.radians(angle))
+            end_x = start_x + 100 * math.cos(math.radians(angle + 10))
+            end_y = start_y + 100 * math.sin(math.radians(angle + 10))
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#FFD700", width=2
+            )
+
+    def _animate_seventh(self):
+        """일곱 번째 달성 애니메이션 - 폭탄 터지기 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 폭탄 효과
+        self._draw_bomb_explosion(center_x, center_y)
+
+        # 2. 충격파
+        self._draw_shockwave(center_x, center_y)
+
+        # 3. 중앙 텍스트 (폭발 글로우)
+        bomb_color = f"#{int(255*abs(math.sin(self.glow_intensity))):02x}{int(0):02x}{int(0):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 32, "bold"),
+            fill=bomb_color,
+        )
+
+        # 4. 폭발 파편
+        for i in range(8):
+            angle = self.angle + i * 45
+            start_x = center_x + 200 * math.cos(math.radians(angle))
+            start_y = center_y + 200 * math.sin(math.radians(angle))
+            end_x = start_x + 110 * math.cos(math.radians(angle + 25))
+            end_y = start_y + 110 * math.sin(math.radians(angle + 15))
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#FF4500", width=3
+            )
+
+    def _animate_eighth(self):
+        """여덟 번째 달성 애니메이션 - 최고 단계 효과"""
+        center_x, center_y = self.width // 2, self.height // 2
+
+        # 1. 우주 폭발
+        self._draw_cosmic_explosion(center_x, center_y)
+
+        # 2. 차원 균열
+        self._draw_dimension_rift_new(center_x, center_y)
+
+        # 3. 중앙 텍스트 (최고 글로우)
+        ultimate_color = f"#{int(255*abs(math.sin(self.glow_intensity))):02x}{int(0):02x}{int(0):02x}"
+        self.canvas.create_text(
+            center_x,
+            center_y,
+            text=f"{self.streak_count}회 달성!",
+            font=("Arial", 36, "bold"),
+            fill=ultimate_color,
+        )
+
+        # 4. 시간 왜곡 효과
+        self._draw_time_distortion_new(center_x, center_y)
+
+        # 5. 우주 폭풍
+        for i in range(12):
+            angle = self.angle + i * 30
+            start_x = center_x + 300 * math.cos(math.radians(angle))
+            start_y = center_y + 300 * math.sin(math.radians(angle))
+            end_x = start_x + 150 * math.cos(math.radians(angle + 20))
+            end_y = start_y + 150 * math.sin(math.radians(angle + 20))
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#FFD700", width=4
+            )
+
+    # 새로운 애니메이션을 위한 헬퍼 함수들
+    def _draw_dragon(self, x, y):
+        """드래곤 그리기"""
+        # 드래곤 몸체
+        self.canvas.create_oval(
+            x - 40, y - 20, x + 40, y + 20, fill="#8B0000", outline="#DC143C", width=3
+        )
+        # 드래곤 머리
+        self.canvas.create_oval(
+            x - 50, y - 30, x - 30, y - 10, fill="#8B0000", outline="#DC143C", width=2
+        )
+        # 드래곤 날개
+        self.canvas.create_arc(
+            x - 60,
+            y - 40,
+            x + 20,
+            y + 40,
+            start=0,
+            extent=180,
+            fill="#DC143C",
+            outline="#8B0000",
+            width=2,
+        )
+
+    def _draw_fire_effect(self, x, y):
+        """화염 효과 그리기"""
+        for i in range(8):
+            angle = i * 45
+            end_x = x + 60 * math.cos(math.radians(angle))
+            end_y = y + 60 * math.sin(math.radians(angle))
+            color = f"#{int(255):02x}{int(100+i*20):02x}{int(0):02x}"
+            self.canvas.create_line(x, y, end_x, end_y, fill=color, width=4)
+
+    def _update_fire_particles(self):
+        """화염 파티클 업데이트"""
+        if not hasattr(self, "fire_particles"):
+            self.fire_particles = []
+            for _ in range(20):
+                self.fire_particles.append(
+                    {
+                        "x": random.randint(0, self.width),
+                        "y": random.randint(0, self.height),
+                        "vx": random.uniform(-2, 2),
+                        "vy": random.uniform(-2, 2),
+                        "size": random.randint(3, 8),
+                        "color": random.choice(["#FF4500", "#FF6347", "#FF8C00"]),
+                    }
+                )
+
+        for particle in self.fire_particles:
+            particle["x"] += particle["vx"]
+            particle["y"] += particle["vy"]
+            self.canvas.create_oval(
+                particle["x"] - particle["size"],
+                particle["y"] - particle["size"],
+                particle["x"] + particle["size"],
+                particle["y"] + particle["size"],
+                fill=particle["color"],
+                outline="#FFD700",
+                width=1,
+            )
+
+    def _draw_shark(self, x, y):
+        """상어 그리기"""
+        # 상어 몸체
+        self.canvas.create_oval(
+            x - 50, y - 15, x + 50, y + 15, fill="#2F4F4F", outline="#708090", width=3
+        )
+        # 상어 지느러미
+        self.canvas.create_polygon(
+            x - 20,
+            y - 25,
+            x,
+            y - 35,
+            x + 20,
+            y - 25,
+            fill="#2F4F4F",
+            outline="#708090",
+            width=2,
+        )
+        # 상어 꼬리
+        self.canvas.create_polygon(
+            x + 40,
+            y - 20,
+            x + 60,
+            y,
+            x + 40,
+            y + 20,
+            fill="#2F4F4F",
+            outline="#708090",
+            width=2,
+        )
+
+    def _draw_wave_effect(self, x, y):
+        """파도 효과 그리기"""
+        for i in range(6):
+            wave_y = y + 80 + i * 20
+            self.canvas.create_arc(
+                x - 100,
+                wave_y - 10,
+                x + 100,
+                wave_y + 10,
+                start=0,
+                extent=180,
+                outline="#00CED1",
+                width=3,
+            )
+
+    def _update_water_particles(self):
+        """물 파티클 업데이트"""
+        if not hasattr(self, "water_particles"):
+            self.water_particles = []
+            for _ in range(25):
+                self.water_particles.append(
+                    {
+                        "x": random.randint(0, self.width),
+                        "y": random.randint(0, self.height),
+                        "vx": random.uniform(-1, 1),
+                        "vy": random.uniform(-1, 1),
+                        "size": random.randint(2, 6),
+                        "color": random.choice(["#00CED1", "#87CEEB", "#4682B4"]),
+                    }
+                )
+
+        for particle in self.water_particles:
+            particle["x"] += particle["vx"]
+            particle["y"] += particle["vy"]
+            self.canvas.create_oval(
+                particle["x"] - particle["size"],
+                particle["y"] - particle["size"],
+                particle["x"] + particle["size"],
+                particle["y"] + particle["size"],
+                fill=particle["color"],
+                outline="#FFFFFF",
+                width=1,
+            )
+
+    def _draw_bullet_effect(self, x, y):
+        """총알 효과 그리기"""
+        for i in range(10):
+            angle = i * 36
+            end_x = x + 100 * math.cos(math.radians(angle))
+            end_y = y + 100 * math.sin(math.radians(angle))
+            self.canvas.create_line(x, y, end_x, end_y, fill="#FFD700", width=2)
+
+    def _draw_muzzle_flash(self, x, y):
+        """총구 화염 그리기"""
+        self.canvas.create_oval(
+            x - 15, y - 15, x + 15, y + 15, fill="#FFFF00", outline="#FF4500", width=3
+        )
+
+    def _draw_bomb_explosion(self, x, y):
+        """폭탄 폭발 효과 그리기"""
+        for i in range(16):
+            angle = i * 22.5
+            end_x = x + 100 * math.cos(math.radians(angle))
+            end_y = y + 100 * math.sin(math.radians(angle))
+            color = f"#{int(255):02x}{int(100+i*10):02x}{int(0):02x}"
+            self.canvas.create_line(x, y, end_x, end_y, fill=color, width=5)
+
+    def _draw_shockwave(self, x, y):
+        """충격파 효과 그리기"""
+        for i in range(5):
+            radius = 60 + i * 20
+            alpha = 1 - i * 0.2
+            color = f"#{int(255*alpha):02x}{int(255*alpha):02x}{int(255*alpha):02x}"
+            self.canvas.create_oval(
+                x - radius,
+                y - radius,
+                x + radius,
+                y + radius,
+                outline=color,
+                width=3,
+                dash=(10, 5),
+            )
+
+    def _draw_cosmic_explosion(self, x, y):
+        """우주 폭발 효과 그리기"""
+        for i in range(24):
+            angle = i * 15
+            end_x = x + 150 * math.cos(math.radians(angle))
+            end_y = y + 150 * math.sin(math.radians(angle))
+            color = f"#{int(255):02x}{int(0):02x}{int(255):02x}"
+            self.canvas.create_line(x, y, end_x, end_y, fill=color, width=6)
+
+    def _draw_dimension_rift_new(self, x, y):
+        """차원 균열 효과 그리기 (새로운 버전)"""
+        for i in range(8):
+            angle = i * 45
+            start_x = x + 80 * math.cos(math.radians(angle))
+            start_y = y + 80 * math.sin(math.radians(angle))
+            end_x = x + 120 * math.cos(math.radians(angle))
+            end_y = y + 120 * math.sin(math.radians(angle))
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#FF00FF", width=4
+            )
+
+    def _draw_time_distortion_new(self, x, y):
+        """시간 왜곡 효과 그리기 (새로운 버전)"""
+        for i in range(6):
+            radius = 100 + i * 25
+            alpha = 1 - i * 0.15
+            color = f"#{int(0):02x}{int(255*alpha):02x}{int(255*alpha):02x}"
+            self.canvas.create_oval(
+                x - radius,
+                y - radius,
+                x + radius,
+                y + radius,
+                outline=color,
+                width=2,
+                dash=(15, 10),
+            )
+
+    def _draw_star(self, x, y, size, color, angle):
+        """별 그리기"""
+        points = []
+        for i in range(10):
+            t = i * math.pi / 5 + math.radians(angle)
+            if i % 2 == 0:
+                r = size
+            else:
+                r = size * 0.4
+            px = x + r * math.cos(t)
+            py = y + r * math.sin(t)
+            points.extend([px, py])
+
+        if len(points) >= 4:
+            self.canvas.create_polygon(points, fill=color, outline="#FFA500", width=2)
+
+    def _draw_lightning(self, x, y):
+        """번개 효과 그리기"""
+        points = [
+            x,
+            y - 80,
+            x + 20,
+            y - 40,
+            x - 15,
+            y - 20,
+            x + 25,
+            y + 20,
+            x - 20,
+            y + 60,
+            x,
+            y + 80,
+        ]
+        self.canvas.create_line(points, fill="#00FFFF", width=4, smooth=True)
+
+        # 번개 글로우 효과
+        glow_points = [
+            x,
+            y - 80,
+            x + 25,
+            y - 40,
+            x - 20,
+            y - 20,
+            x + 30,
+            y + 20,
+            x - 25,
+            y + 60,
+            x,
+            y + 80,
+        ]
+        self.canvas.create_line(glow_points, fill="#FFFFFF", width=2, smooth=True)
+
+    def _draw_arrow(self, x, y, size, color, angle):
+        """화살표 그리기"""
+        points = [
+            x + size * math.cos(math.radians(angle)),
+            y + size * math.sin(math.radians(angle)),
+            x + size * math.cos(math.radians(angle + 150)),
+            y + size * math.sin(math.radians(angle + 150)),
+            x + size * math.cos(math.radians(angle + 210)),
+            y + size * math.sin(math.radians(angle + 210)),
+        ]
+        self.canvas.create_polygon(points, fill=color, outline="#000000", width=1)
+
+    def _draw_explosion(self, x, y):
+        """폭발 효과 그리기"""
+        for i in range(12):
+            angle = i * 30
+            end_x = x + 80 * math.cos(math.radians(angle))
+            end_y = y + 80 * math.sin(math.radians(angle))
+            self.canvas.create_line(x, y, end_x, end_y, fill="#FF4500", width=3)
+
+        # 폭발 중심
+        self.canvas.create_oval(
+            x - 20, y - 20, x + 20, y + 20, fill="#FFFF00", outline="#FF4500", width=3
+        )
+
+    def _draw_magic_circle(self, x, y):
+        """마법진 그리기"""
+        # 외부 원
+        self.canvas.create_oval(
+            x - 100, y - 100, x + 100, y + 100, outline="#FF00FF", width=3
+        )
+
+        # 내부 마법 문양
+        for i in range(6):
+            angle = self.angle + i * 60
+            point_x = x + 60 * math.cos(math.radians(angle))
+            point_y = y + 60 * math.sin(math.radians(angle))
+            self.canvas.create_oval(
+                point_x - 10,
+                point_y - 10,
+                point_x + 10,
+                point_y + 10,
+                fill="#FF00FF",
+                outline="#FFFFFF",
+            )
+
+    def _update_magic_particles(self):
+        """마법 파티클 업데이트"""
+        if not self.particles:
+            self.particles = []
+            for _ in range(15):
+                self.particles.append(
+                    {
+                        "x": random.randint(0, self.width),
+                        "y": random.randint(0, self.height),
+                        "vx": random.uniform(-3, 3),
+                        "vy": random.uniform(-3, 3),
+                        "size": random.randint(2, 5),
+                        "color": random.choice(["#FF00FF", "#00FFFF", "#FFFF00"]),
+                    }
+                )
+
+        for particle in self.particles:
+            particle["x"] += particle["vx"]
+            particle["y"] += particle["vy"]
+
+            if particle["x"] < 0 or particle["x"] > self.width:
+                particle["vx"] *= -1
+            if particle["y"] < 0 or particle["y"] > self.height:
+                particle["vy"] *= -1
+
+            self.canvas.create_oval(
+                particle["x"] - particle["size"],
+                particle["y"] - particle["size"],
+                particle["x"] + particle["size"],
+                particle["y"] + particle["size"],
+                fill=particle["color"],
+                outline="#FFFFFF",
+            )
+
+    def _draw_mega_explosion(self, x, y):
+        """거대한 폭발 효과"""
+        for i in range(20):
+            angle = i * 18
+            end_x = x + 120 * math.cos(math.radians(angle))
+            end_y = y + 120 * math.sin(math.radians(angle))
+            color = f"#{int(255):02x}{int(100+i*7):02x}{int(0):02x}"
+            self.canvas.create_line(x, y, end_x, end_y, fill=color, width=4)
+
+    def _draw_gravity_field(self, x, y):
+        """중력장 효과"""
+        for i in range(8):
+            radius = 80 + i * 15
+            alpha = 1 - i * 0.1
+            color = f"#{int(0):02x}{int(0):02x}{int(255*alpha):02x}"
+            self.canvas.create_oval(
+                x - radius,
+                y - radius,
+                x + radius,
+                y + radius,
+                outline=color,
+                width=2,
+                dash=(10, 5),
+            )
+
+    def _update_space_particles(self):
+        """우주 파티클 업데이트"""
+        if not self.particles:
+            self.particles = []
+            for _ in range(25):
+                self.particles.append(
+                    {
+                        "x": random.randint(0, self.width),
+                        "y": random.randint(0, self.height),
+                        "vx": random.uniform(-2, 2),
+                        "vy": random.uniform(-2, 2),
+                        "size": random.randint(2, 6),
+                        "color": random.choice(
+                            ["#FFFFFF", "#87CEEB", "#FFD700", "#FF69B4"]
+                        ),
+                    }
+                )
+
+        for particle in self.particles:
+            particle["x"] += particle["vx"]
+            particle["y"] += particle["vy"]
+
+            if particle["x"] < 0 or particle["x"] > self.width:
+                particle["vx"] *= -1
+            if particle["y"] < 0 or particle["y"] > self.height:
+                particle["vy"] *= -1
+
+            self.canvas.create_oval(
+                particle["x"] - particle["size"],
+                particle["y"] - particle["size"],
+                particle["x"] + particle["size"],
+                particle["y"] + particle["size"],
+                fill=particle["color"],
+                outline="#000000",
+            )
+
+    def _draw_black_hole(self, x, y):
+        """블랙홀 효과"""
+        # 블랙홀 중심
+        self.canvas.create_oval(
+            x - 30, y - 30, x + 30, y + 30, fill="#000000", outline="#FFD700", width=3
+        )
+
+        # 중력 왜곡 효과
+        for i in range(5):
+            radius = 40 + i * 20
+            self.canvas.create_oval(
+                x - radius,
+                y - radius,
+                x + radius,
+                y + radius,
+                outline="#FFD700",
+                width=1,
+                dash=(5, 10),
+            )
+
+    def _draw_supernova(self, x, y):
+        """초신성 폭발 효과"""
+        for i in range(30):
+            angle = i * 12
+            end_x = x + 150 * math.cos(math.radians(angle))
+            end_y = y + 150 * math.sin(math.radians(angle))
+            color = f"#{int(255):02x}{int(255):02x}{int(255):02x}"
+            self.canvas.create_line(x, y, end_x, end_y, fill=color, width=5)
+
+    def _draw_dimension_rift(self, x, y):
+        """차원 균열 효과"""
+        # 균열 선들
+        for i in range(10):
+            start_x = x + random.randint(-100, 100)
+            start_y = y + random.randint(-100, 100)
+            end_x = start_x + random.randint(-50, 50)
+            end_y = start_y + random.randint(-50, 50)
+            self.canvas.create_line(
+                start_x, start_y, end_x, end_y, fill="#FF00FF", width=3
+            )
+
+    def _draw_time_distortion(self, x, y):
+        """시간 왜곡 효과"""
+        # 나선형 효과
+        for i in range(100):
+            angle = i * 3.6
+            radius = i * 2
+            point_x = x + radius * math.cos(math.radians(angle))
+            point_y = y + radius * math.sin(math.radians(angle))
+            if 0 <= point_x <= self.width and 0 <= point_y <= self.height:
+                self.canvas.create_oval(
+                    point_x - 1, point_y - 1, point_x + 1, point_y + 1, fill="#00FFFF"
+                )
+
+    def _update_cosmic_storm(self):
+        """우주 폭풍 효과"""
+        if not self.particles:
+            self.particles = []
+            for _ in range(40):
+                self.particles.append(
+                    {
+                        "x": random.randint(0, self.width),
+                        "y": random.randint(0, self.height),
+                        "vx": random.uniform(-4, 4),
+                        "vy": random.uniform(-4, 4),
+                        "size": random.randint(1, 8),
+                        "color": random.choice(
+                            [
+                                "#FF0000",
+                                "#00FF00",
+                                "#0000FF",
+                                "#FFFF00",
+                                "#FF00FF",
+                                "#00FFFF",
+                            ]
+                        ),
+                    }
+                )
+
+        for particle in self.particles:
+            particle["x"] += particle["vx"]
+            particle["y"] += particle["vy"]
+
+            if particle["x"] < 0 or particle["x"] > self.width:
+                particle["vx"] *= -1
+            if particle["y"] < 0 or particle["y"] > self.height:
+                particle["vy"] *= -1
+
+            self.canvas.create_oval(
+                particle["x"] - particle["size"],
+                particle["y"] - particle["size"],
+                particle["x"] + particle["size"],
+                particle["y"] + particle["size"],
+                fill=particle["color"],
+                outline="#FFFFFF",
+            )
+
+    def _draw_divine_touch(self, x, y):
+        """신의 손길 효과"""
+        # 천사 날개 효과
+        for wing in range(2):
+            wing_x = x + (50 if wing == 0 else -50)
+            for i in range(5):
+                feather_x = wing_x + random.randint(-20, 20)
+                feather_y = y + random.randint(-30, 30)
+                self.canvas.create_oval(
+                    feather_x - 5,
+                    feather_y - 5,
+                    feather_x + 5,
+                    feather_y + 5,
+                    fill="#FFFFFF",
+                    outline="#FFD700",
+                )
+
+    def _draw_rainbow_aura(self, x, y):
+        """무지개 빛 효과"""
+        colors = [
+            "#FF0000",
+            "#FF7F00",
+            "#FFFF00",
+            "#00FF00",
+            "#0000FF",
+            "#4B0082",
+            "#9400D3",
+        ]
+        for i, color in enumerate(colors):
+            radius = 120 + i * 10
+            self.canvas.create_oval(
+                x - radius, y - radius, x + radius, y + radius, outline=color, width=2
+            )
+
+
 class LoadingAnimation:
     """재미있는 로딩 애니메이션을 제공하는 클래스"""
 
@@ -320,8 +1259,8 @@ class PomodoroPlannerApp:
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
         )
-        self.root.geometry("1200x750")
-        self.root.minsize(500, 300)  # 최소 크기 설정
+        self.root.geometry("1200x800")
+        self.root.minsize(600, 400)  # 최소 크기 설정
         self.db_path = "pomodoro_data.db"
 
         # --- MODEL ---
@@ -349,9 +1288,15 @@ class PomodoroPlannerApp:
         # 로딩 애니메이션 초기화
         self.loading_animation = LoadingAnimation(self.root, 400, 300)
 
+        # 연속 달성 애니메이션 초기화
+        self.streak_animation = StreakAnimation(self.root, 400, 300)
+
         # 'today_stats' for live tracking, 'displayed_stats' for UI
         self.today_stats = collections.defaultdict(int)
         self.displayed_stats = self.today_stats
+
+        # 연속 완료 카운트 추적
+        self.consecutive_completions = 0
 
         # 'today_tasks' for live tasks, 'displayed_tasks_data' for UI tasks
         self.today_tasks = collections.OrderedDict()
@@ -371,6 +1316,13 @@ class PomodoroPlannerApp:
         self._load_today_tasks()  # Load today's tasks on startup
         # Initialize global next task id to avoid UNIQUE constraint conflicts
         self.next_task_id = self._get_next_task_id()
+
+        # 연속 달성 시스템 초기화 (횟수 기준)
+        self.current_streak = 0
+        self.last_completion_date = None
+        self.streak_milestones = [1, 2, 3, 4, 5, 6, 7, 8]  # 연속 달성 마일스톤 (1-8회)
+        self._load_streak_data()  # 연속 달성 데이터 로드
+
         self._setup_styles()
         self._create_widgets()
 
@@ -411,6 +1363,107 @@ class PomodoroPlannerApp:
         )
         conn.commit()
         conn.close()
+
+    def _load_streak_data(self):
+        """연속 달성 데이터를 로드합니다."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # 연속 달성 테이블이 없으면 생성
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS streak_data (
+                    id INTEGER PRIMARY KEY,
+                    current_streak INTEGER DEFAULT 0,
+                    last_completion_date TEXT,
+                    longest_streak INTEGER DEFAULT 0
+                )
+            """
+            )
+
+            # 기존 데이터 로드
+            cursor.execute(
+                "SELECT current_streak, last_completion_date, longest_streak FROM streak_data LIMIT 1"
+            )
+            row = cursor.fetchone()
+
+            if row:
+                self.current_streak = row[0]
+                self.last_completion_date = row[1]
+                self.longest_streak = row[2]
+            else:
+                # 초기 데이터 삽입
+                cursor.execute(
+                    "INSERT INTO streak_data (current_streak, longest_streak) VALUES (0, 0)"
+                )
+                self.current_streak = 0
+                self.last_completion_date = None
+                self.longest_streak = 0
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            print(f"연속 달성 데이터 로드 오류: {e}")
+            self.current_streak = 0
+            self.last_completion_date = None
+            self.longest_streak = 0
+
+    def _save_streak_data(self):
+        """연속 달성 데이터를 저장합니다."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                UPDATE streak_data SET
+                current_streak = ?,
+                last_completion_date = ?,
+                longest_streak = ?
+                WHERE id = 1
+            """,
+                (self.current_streak, self.last_completion_date, self.longest_streak),
+            )
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            print(f"연속 달성 데이터 저장 오류: {e}")
+
+    def _update_streak(self):
+        """연속 달성을 업데이트하고 애니메이션을 표시합니다."""
+        # 뽀모도로 완료 시 연속 달성 횟수 증가
+        self.current_streak += 1
+
+        # 마일스톤 체크
+        self._check_streak_milestone()
+
+        # 최장 연속 달성 업데이트 (데이터베이스에 저장된 값과 비교)
+        if self.current_streak > self.longest_streak:
+            self.longest_streak = self.current_streak
+
+        # 데이터베이스에 저장
+        self._save_streak_data()
+
+        # 통계 표시 업데이트
+        self._update_stats_display()
+
+    def _check_streak_milestone(self):
+        """연속 달성 마일스톤을 확인하고 애니메이션을 표시합니다."""
+        if self.current_streak in self.streak_milestones:
+            # 연속 달성 애니메이션 표시
+            self.streak_animation.show_streak_animation(self.current_streak)
+
+            # 애니메이션 지속 시간 상수 사용 (모든 애니메이션 통일)
+            self.root.after(
+                self.streak_animation.ANIMATION_DURATION, self.streak_animation.hide
+            )
+
+            # 터미널에 알림
+            print(f"🎉 {self.current_streak}회 연속 달성! 멋진 성과입니다!")
 
     def _get_next_task_id(self):
         """Returns a globally unique next task id across the whole tasks table and today's in-memory tasks."""
@@ -794,41 +1847,53 @@ class PomodoroPlannerApp:
         self.stats_frame = ttk.LabelFrame(left_frame, text="통계", padding="10")
         self.stats_frame.pack(fill=tk.X, pady=5)
 
+        # 통계 내용을 담을 스크롤 가능한 프레임
+        stats_content_frame = ttk.Frame(self.stats_frame)
+        stats_content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
         self.stats_labels = {
-            k: ttk.Label(self.stats_frame, text="")
-            for k in ["completed", "success_rate", "focus_time", "task_completion"]
+            k: ttk.Label(stats_content_frame, text="")
+            for k in [
+                "completed",
+                "success_rate",
+                "focus_time",
+                "task_completion",
+                "streak",
+            ]
         }
         for label in self.stats_labels.values():
-            label.pack(anchor="w")
+            label.pack(anchor="w", pady=2)
 
         # 버튼들을 담을 프레임 (통계 하단에 중앙정렬)
-        button_frame = ttk.Frame(self.stats_frame)
-        button_frame.pack(pady=10)
+        self.button_frame = ttk.Frame(stats_content_frame)
+        self.button_frame.pack(pady=10)
 
         # 설정 버튼 (통계 분석 보기 버튼 왼쪽)
         settings_button = ttk.Button(
-            button_frame, text="설정", command=self._open_settings_window
+            self.button_frame, text="설정", command=self._open_settings_window
         )
         settings_button.pack(side=tk.LEFT, padx=(0, 10))
 
         # 통계 분석 보기 버튼
         analytics_button = ttk.Button(
-            button_frame, text="통계 분석 보기", command=self._open_analytics_window
+            self.button_frame,
+            text="통계 분석 보기",
+            command=self._open_analytics_window,
         )
         analytics_button.pack(side=tk.LEFT, padx=(0, 10))
 
         # AI 생산성 진단 버튼
         ai_button = ttk.Button(
-            button_frame, text="AI 생산성 진단", command=self._handle_ai_diagnosis
+            self.button_frame, text="AI 생산성 진단", command=self._handle_ai_diagnosis
         )
-        ai_button.pack(side=tk.LEFT)
+        ai_button.pack(side=tk.LEFT, padx=(0, 10))
 
         # 통계 프레임에 이벤트 바인딩 추가
         self.stats_frame.bind("<Enter>", lambda e: self._on_stats_frame_enter())
         self.stats_frame.bind("<Leave>", lambda e: self._on_stats_frame_leave())
 
         # 통계 프레임에 마우스 휠 스크롤 지원 추가
-        self._bind_mouse_wheel_scroll(self.stats_frame)
+        self._bind_mouse_wheel_scroll(stats_content_frame)
 
     def _create_right_pane_widgets(self, parent):
         container = ttk.Frame(parent)
@@ -930,7 +1995,7 @@ class PomodoroPlannerApp:
         """설정 창을 엽니다."""
         settings_win = tk.Toplevel(self.root)
         settings_win.title("설정")
-        settings_win.geometry("400x300")
+        settings_win.geometry("450x450")  # 창 크기 확대
         settings_win.transient(self.root)
         settings_win.grab_set()
 
@@ -962,6 +2027,28 @@ class PomodoroPlannerApp:
         )
         volume_spinbox.pack(side=tk.LEFT, padx=5)
         ttk.Label(volume_frame, text="%").pack(side=tk.LEFT)
+
+        # 데이터 관리 프레임
+        data_frame = ttk.LabelFrame(settings_win, text="데이터 관리", padding="10")
+        data_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # 경고 메시지
+        warning_label = ttk.Label(
+            data_frame,
+            text="⚠️ 주의: 데이터 삭제는 되돌릴 수 없습니다!",
+            foreground="red",
+            font=("Arial", 9, "bold"),
+        )
+        warning_label.pack(pady=(0, 10))
+
+        # 데이터 삭제 버튼
+        delete_button = ttk.Button(
+            data_frame,
+            text="🗑️ 모든 데이터 삭제",
+            command=lambda: self._confirm_data_deletion(settings_win),
+            style="Danger.TButton",
+        )
+        delete_button.pack(pady=5)
 
         # 설정 저장/취소 버튼
         button_frame = ttk.Frame(settings_win)
@@ -998,6 +2085,11 @@ class PomodoroPlannerApp:
         analytics_win = tk.Toplevel(self.root)
         analytics_win.title("Analytics")
         analytics_win.geometry("800x600")
+
+        # 창을 최상위로 가져오기
+        analytics_win.lift()
+        analytics_win.focus_force()
+        analytics_win.grab_set()  # 모달 창으로 만들기
         graph_frame = ttk.Frame(analytics_win)
         graph_frame.pack(expand=True, fill=tk.BOTH, side=tk.BOTTOM)
         button_frame = ttk.Frame(analytics_win, padding=5)
@@ -2352,9 +3444,11 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             self.root.bell()
 
     def _on_window_resize(self, event):
-        """창 크기 변경 시 캘린더와 위젯들을 재조정합니다."""
+        """창 크기 변경 시 UI를 반응형으로 재조정합니다."""
         if event.widget == self.root:
             current_time = time_module.time()
+            window_width = event.width
+            window_height = event.height
 
             # 적응형 디바운싱: 리사이징 패턴에 따라 지연 시간 조절
             if current_time - self._last_resize_time < 0.05:  # 50ms 이내 연속 리사이징
@@ -2372,8 +3466,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             if self._resize_timer:
                 self.root.after_cancel(self._resize_timer)
 
-            # 계산된 지연 시간으로 재조정 실행
-            self._resize_timer = self.root.after(delay, self._redraw_calendar)
+            # 창 크기에 따른 UI 모드 결정 및 재조정 실행
+            self._resize_timer = self.root.after(
+                delay, lambda: self._adjust_ui_for_size(window_width, window_height)
+            )
 
     def _on_window_minimize(self, event):
         """창이 최소화될 때 호출됩니다."""
@@ -2384,6 +3480,46 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         """창이 복원될 때 호출됩니다."""
         if event.widget == self.root:
             self._show_full_ui()
+
+    def _adjust_ui_for_size(self, width, height):
+        """창 크기에 따라 UI를 적응형으로 조정합니다."""
+        # 창 크기 임계값 설정
+        min_width_threshold = 600
+        min_height_threshold = 400
+
+        if width < min_width_threshold or height < min_height_threshold:
+            # 작은 창 모드: UI 요소들을 압축하고 스크롤 가능하게 만듦
+            self._show_compact_ui()
+        else:
+            # 일반 모드: 모든 UI 요소를 표시
+            self._show_full_ui()
+
+        # 캘린더 재그리기
+        self._redraw_calendar()
+
+    def _show_compact_ui(self):
+        """압축된 UI 모드: 작은 창에 최적화"""
+        if hasattr(self, "_is_compact_mode") and self._is_compact_mode:
+            return
+
+        self._is_compact_mode = True
+
+        # 통계 프레임을 압축
+        if hasattr(self, "stats_frame"):
+            self.stats_frame.configure(padding="5")
+
+        # 버튼들을 세로로 배치
+        if hasattr(self, "button_frame"):
+            for child in self.button_frame.winfo_children():
+                child.pack_forget()
+                child.pack(side=tk.TOP, fill=tk.X, pady=2)
+
+        # 작업 관리 프레임을 압축
+        if hasattr(self, "task_manager_frame"):
+            self.task_manager_frame.configure(padding="5")
+
+        # 창 제목 변경
+        self.root.title("Pomodoro Timer (Compact)")
 
     def _redraw_calendar(self):
         """캘린더를 다시 그립니다."""
@@ -2721,9 +3857,27 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         """전체 UI 모드: 모든 요소 표시"""
         # UI 상태를 추적하는 변수 설정
         self._is_minimal_mode = False
+        self._is_compact_mode = False
 
         # 타이머 프레임을 원래 위치로 복원
         self.timer_frame.pack(fill=tk.X, pady=5)
+
+        # 통계 프레임을 원래 크기로 복원
+        if hasattr(self, "stats_frame"):
+            self.stats_frame.configure(padding="10")
+
+        # 버튼들을 원래 가로 배치로 복원
+        if hasattr(self, "button_frame"):
+            for child in self.button_frame.winfo_children():
+                child.pack_forget()
+                child.pack(side=tk.LEFT, padx=(0, 10))
+            # 마지막 버튼의 padx 제거
+            if self.button_frame.winfo_children():
+                self.button_frame.winfo_children()[-1].pack_configure(padx=0)
+
+        # 작업 관리 프레임을 원래 크기로 복원
+        if hasattr(self, "task_manager_frame"):
+            self.task_manager_frame.configure(padding="10")
 
         # 창 제목 복원
         self.root.title("Juns Enterprise - Pomodoro Timer & Task Manager v2.1.0")
@@ -2838,6 +3992,21 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             if self.seconds_left < self.work_duration:
                 self.today_stats["failure"] += 1
 
+        # 휴식 상태에서 리셋할 때 동기부여 메시지 표시
+        if (
+            self.pomodoro_state == "break"
+            and not alarm_was_on
+            and self.consecutive_completions > 0
+        ):
+            self._show_motivation_message()
+
+        # 모든 리셋 상황에서 연속 완료 카운트 리셋 (사용자 의도적 중단)
+        self.consecutive_completions = 0
+
+        # 연속 달성 횟수도 리셋 (사용자가 의도적으로 중단한 경우)
+        self.current_streak = 0
+        self._save_streak_data()
+
         self.pomodoro_state = "stopped"
         self.paused_from_state = None
         self.seconds_left = self.work_duration
@@ -2852,14 +4021,18 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         if self.pomodoro_state == "work":
             self.today_stats["success"] += 1
             self.today_stats["completed_pomodoros"] += 1
+            self.consecutive_completions += 1  # 연속 완료 카운트 증가
+
+            # 연속 달성 업데이트
+            self._update_streak()
+
             self.pomodoro_state = "break"  # Transition to break
             self.seconds_left = self.break_duration
             self._start_alarm()  # Start alarm when transitioning to break
         elif self.pomodoro_state == "break":
-            # 휴식시간 종료 시: 자동으로 작업 상태로 전환 (루프 계속 진행)
+            # 휴식시간 종료 시: 정상적으로 작업 상태로 전환
             self.pomodoro_state = "work"  # Transition to work
             self.seconds_left = self.work_duration
-            # 기존 알람이 켜진 상태라면 계속 울리도록 유지 (사용자가 끌 때까지)
 
         self._update_pomodoro_button()
         self._update_timer_display()  # Update timer display immediately
@@ -2948,6 +4121,15 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             text=f"작업 달성도: {task_completion_rate:.1f}%"
         )
 
+        # 연속 달성 정보 표시
+        if self.longest_streak > 0:
+            streak_text = (
+                f"🔥연속 달성: {self.current_streak}회 (최장: {self.longest_streak}회)"
+            )
+        else:
+            streak_text = f"🔥 연속 달성: {self.current_streak}회"
+        self.stats_labels["streak"].config(text=streak_text)
+
     def _start_timer(self):
         if not self._timer_id:
             self._update_clocks()
@@ -2998,6 +4180,31 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             self.root.destroy()
 
     def _start_alarm(self):
+        # 휴식 상태로 전환할 때 기존 알람이 울리는 상태라면 규칙 위반
+        if self.pomodoro_state == "break" and self.alarm_on:
+            # 휴식 알람이 울리는 상태에서 다시 휴식에 진입 시도 → 규칙 위반
+            self.today_stats["failure"] += 1
+            self.consecutive_completions = 0  # 연속 완료 카운트 리셋
+            messagebox.showwarning(
+                "규칙 위반, 자리비움",
+                "2개 세션 무효화, 휴식 알람을 끄지 않고 다시 휴식에 진입하려 했습니다.\n\n"
+                "포모도로 기법의 효과를 위해서 절차를 준수해주세요.",
+            )
+            # 타이머 정지 및 리셋
+            self.pomodoro_state = "stopped"
+            self.seconds_left = self.work_duration
+            self.alarm_on = False
+            if self._alarm_after_id:
+                self.root.after_cancel(self._alarm_after_id)
+                self._alarm_after_id = None
+            self._update_pomodoro_button()
+            self._update_timer_display()
+            if self.selected_date == datetime.now().date():
+                self._update_stats_display()
+            self._save_data()
+            return
+
+        # 정상적인 알람 시작
         if not self.alarm_on:
             self.alarm_on = True
             self._ring_bell_repeatedly()
@@ -3031,6 +4238,7 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
                 if result:
                     # 사용자가 확인한 경우 실패 처리 및 리셋
                     self.today_stats["failure"] += 1
+                    self.consecutive_completions = 0  # 실패 시 연속 완료 카운트 리셋
                     self.alarm_on = False
                     if self._alarm_after_id:
                         self.root.after_cancel(self._alarm_after_id)
@@ -3058,6 +4266,27 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
 
     def _continue_from_break(self):
         self.alarm_stop_()
+
+    def _show_motivation_message(self):
+        """연속 완료 카운트에 따른 동기부여 메시지를 표시합니다."""
+        consecutive = self.consecutive_completions
+
+        if consecutive == 1:
+            message = "🎉 첫 번째 포모도로 완료!\n\n잘하셨습니다! 이제 다음 세션을 시작해보세요."
+        elif consecutive == 2:
+            message = "🔥 두 번째 연속 완료!\n\n훌륭한 집중력입니다! 계속해서 좋은 페이스를 유지해보세요."
+        elif consecutive == 3:
+            message = "⚡ 세 번째 연속 완료!\n\n정말 대단합니다! 당신의 집중력이 점점 더 강해지고 있어요."
+        elif consecutive == 4:
+            message = "🚀 네 번째 연속 완료!\n\n놀라운 성과입니다! 이제 포모도로의 진정한 힘을 경험하고 계세요."
+        elif consecutive == 5:
+            message = "💎 다섯 번째 연속 완료!\n\n완벽한 집중력! 당신은 진정한 생산성 마스터입니다!"
+        elif consecutive <= 10:
+            message = f"🌟 {consecutive}번째 연속 완료!\n\n믿을 수 없는 집중력입니다! 계속해서 이 놀라운 페이스를 유지해보세요."
+        else:
+            message = f"🏆 {consecutive}번째 연속 완료!\n\n전설적인 집중력! 당신은 포모도로의 진정한 달인입니다!"
+
+        messagebox.showinfo("🎯 연속 완료 축하!", message)
 
     def _bind_mouse_wheel_scroll(self, widget):
         """마우스 휠 스크롤을 특정 위젯(Canvas, Text 등)에 바인딩합니다."""
@@ -3120,6 +4349,83 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         """캘린더 캔버스에서 마우스 드래그 스크롤을 종료합니다."""
         if hasattr(self, "calendar_dragging"):
             self.calendar_dragging = False
+
+    def _confirm_data_deletion(self, settings_window):
+        """데이터 삭제 확인 대화상자를 표시합니다."""
+        # 첫 번째 확인: 정말 삭제할지 묻기
+        first_confirm = messagebox.askyesno(
+            "⚠️ 데이터 삭제 확인",
+            "정말로 모든 데이터를 삭제하시겠습니까?\n\n"
+            "이 작업은 되돌릴 수 없으며 다음 데이터들이 삭제됩니다:\n"
+            "• 모든 뽀모도로 기록\n"
+            "• 모든 작업 데이터\n"
+            "• 통계 데이터\n"
+            "• 연속 달성 기록\n\n"
+            "계속하시겠습니까?",
+            icon="warning",
+        )
+
+        if not first_confirm:
+            return
+
+        # 두 번째 확인: 최종 확인
+        final_confirm = messagebox.askyesno(
+            "🚨 최종 확인",
+            "마지막 경고입니다!\n\n"
+            "모든 데이터가 영구적으로 삭제됩니다.\n"
+            "정말로 진행하시겠습니까?",
+            icon="error",
+        )
+
+        if final_confirm:
+            self._delete_all_data()
+            settings_window.destroy()
+            messagebox.showinfo(
+                "✅ 완료",
+                "모든 데이터가 성공적으로 삭제되었습니다.\n"
+                "애플리케이션이 초기 상태로 돌아갑니다.",
+            )
+
+    def _delete_all_data(self):
+        """모든 데이터를 삭제합니다."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # 모든 테이블의 데이터 삭제
+            tables = ["daily_summary", "tasks", "streak_data"]
+
+            for table in tables:
+                cursor.execute(f"DELETE FROM {table}")
+                print(f"✅ {table} 테이블의 모든 데이터 삭제 완료")
+
+            # 데이터베이스 변경사항 저장
+            conn.commit()
+            conn.close()
+
+            # 메모리 데이터 초기화
+            self.today_stats = {
+                "completed_pomodoros": 0,
+                "success": 0,
+                "failure": 0,
+                "total_focus_seconds": 0,
+            }
+
+            self.today_tasks.clear()
+            self.current_streak = 0
+            self.longest_streak = 0
+
+            # UI 업데이트
+            self._update_stats_display()
+            self._load_data_for_selected_date()
+
+            print("✅ 모든 데이터 삭제 및 초기화 완료")
+
+        except Exception as e:
+            print(f"❌ 데이터 삭제 중 오류 발생: {e}")
+            messagebox.showerror(
+                "오류", f"데이터 삭제 중 오류가 발생했습니다:\n{str(e)}"
+            )
 
 
 if __name__ == "__main__":
