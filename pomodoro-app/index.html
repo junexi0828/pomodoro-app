@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>포모도로 타이머</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <h1>포모도로 타이머</h1>
+
+        <div id="pomodoro-timer">
+            <div id="time-display">25:00</div>
+            <div id="controls">
+                <button id="start-stop-button">집중 시작</button>
+                <button id="reset-button">리셋</button>
+            </div>
+        </div>
+
+        <div id="task-manager">
+            <h2>작업 관리</h2>
+            <form id="add-task-form">
+                <input type="text" id="task-name-input" placeholder="작업 이름" required>
+                <input type="number" id="task-hours-input" placeholder="시간" min="0" value="0">
+                <input type="number" id="task-minutes-input" placeholder="분" min="0" max="59" value="25">
+                <button type="submit">추가</button>
+            </form>
+            <ul id="task-list"></ul>
+        </div>
+
+        <div id="stats-dashboard">
+            <h2>통계</h2>
+            <p id="pomodoro-completion-count">완료한 뽀모도로: 0회</p>
+            <p id="pomodoro-success-rate">뽀모도로 성공률: N/A</p>
+            <p id="focus-ratio">집중도: N/A</p>
+            <p id="task-completion-rate">작업 완료율: N/A</p>
+        </div>
+    </div>
+
+    <audio id="notification-sound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3" preload="auto"></audio>
+
+    <script src="app.js" defer></script>
+</body>
+</html>
