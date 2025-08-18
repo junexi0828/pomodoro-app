@@ -1267,8 +1267,8 @@ class PomodoroPlannerApp:
         self.selected_date = datetime.now().date()
         self.pomodoro_state = "stopped"
         self.paused_from_state = None
-        self.work_duration = 0.1 * 60
-        self.break_duration = 0.1 * 60
+        self.work_duration = 25 * 60
+        self.break_duration = 5 * 60
         self.pause_duration = 60
         self.seconds_left = self.work_duration
         self.pause_seconds_left = self.pause_duration
@@ -2069,6 +2069,10 @@ class PomodoroPlannerApp:
             settings_win.winfo_height() // 2
         )
         settings_win.geometry(f"+{x}+{y}")
+
+    def _preview_sound(self):
+        """설정에서 볼륨이 변경될 때 사운드 미리보기를 재생합니다."""
+        self._play_notification_sound()
 
     def _save_settings(self):
         """설정을 저장합니다."""
