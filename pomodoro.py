@@ -2056,7 +2056,7 @@ class PomodoroPlannerApp:
         warning_label.pack(pady=(0, 10))
 
         # 데이터 삭제 버튼
-
+데 ㅗ
         delete_button = ttk.Button(
             data_frame,
             text="🗑️ 모든 데이터 삭제",
