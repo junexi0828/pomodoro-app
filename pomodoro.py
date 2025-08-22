@@ -1,3 +1,12 @@
+# ========================================
+# 🚨 배포 전 정리 체크리스트
+# ========================================
+# 1. DELETE_BEFORE_DEPLOY로 표시된 테스트 코드 모두 삭제
+# 2. 테스트 UI 요소 모두 삭제
+# 3. 테스트 관련 import 정리
+# 4. 테스트 관련 변수 정리
+# ========================================
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 import collections
@@ -2023,7 +2032,12 @@ class PomodoroPlannerApp:
         volume_frame.pack(fill=tk.X, pady=10)
         ttk.Label(volume_frame, text="볼륨:").pack(side=tk.LEFT)
         volume_spinbox = tk.Spinbox(
-            volume_frame, from_=0, to=100, width=5, textvariable=self.sound_volume
+            volume_frame,
+            from_=0,
+            to=100,
+            width=5,
+            textvariable=self.sound_volume,
+            command=self._preview_sound,
         )
         volume_spinbox.pack(side=tk.LEFT, padx=5)
         ttk.Label(volume_frame, text="%").pack(side=tk.LEFT)
@@ -2049,6 +2063,24 @@ class PomodoroPlannerApp:
             style="Danger.TButton",
         )
         delete_button.pack(pady=5)
+
+        # ========================================
+        # 🚨 DELETE_BEFORE_DEPLOY: 테스트 UI 시작
+        # ========================================
+        # 테스트 버튼 (개발자용)
+        test_frame = ttk.LabelFrame(settings_win, text="개발자 테스트", padding="10")
+        test_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        test_button = ttk.Button(
+            test_frame,
+            text="🧪 자정 넘어감 테스트",
+            command=self._test_midnight_crossing,
+            style="Accent.TButton",
+        )
+        test_button.pack(pady=5)
+        # ========================================
+        # 🚨 DELETE_BEFORE_DEPLOY: 테스트 UI 끝
+        # ========================================
 
         # 설정 저장/취소 버튼
         button_frame = ttk.Frame(settings_win)
@@ -3447,6 +3479,22 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             # 기본 알림음
             self.root.bell()
 
+    def _preview_sound(self):
+        """볼륨 조정 시 미리듣기를 제공합니다."""
+        if self.sound_type.get() == "custom" and self.sound_loaded:
+            # 커스텀 소리 미리듣기
+            try:
+                volume = int(self.sound_volume.get()) / 100.0
+                self.notification_sound.set_volume(volume)
+                self.notification_sound.play()
+            except Exception as e:
+                print(f"미리듣기 재생 실패: {e}")
+                # pygame이 없거나 오류가 발생하면 기본 벨 소리 사용
+                self.root.bell()
+        else:
+            # 기본 알림음 미리듣기
+            self.root.bell()
+
     def _on_window_resize(self, event):
         """창 크기 변경 시 UI를 반응형으로 재조정합니다."""
         if event.widget == self.root:
@@ -3817,6 +3865,9 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
                     self.today_stats["failure"] += 1
                 self._reset_pomodoro()
 
+        # 자정을 넘어가는 날짜 변경 감지 및 처리
+        self._check_and_handle_day_change()
+
         if self.selected_date == datetime.now().date():
             self._check_and_update_task_statuses()
             for task_id in list(
@@ -3903,16 +3954,219 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         """마우스 드래그 스크롤 종료"""
         pass  # 필요한 경우 추가 로직 구현
 
-    def _handle_day_change(self):
-        # This function is no longer called from _update_clocks.
-        # It's kept for potential future use if day rollover logic is re-introduced.
+    def _check_and_handle_day_change(self):
+        """자정을 넘어가는 날짜 변경을 감지하고 처리합니다."""
+        current_date = datetime.now().date()
+
+        # 자정을 넘어간 경우에만 처리
+        if self._is_midnight_crossed(current_date):
+            self._handle_midnight_crossing(current_date)
+
+    def _is_midnight_crossed(self, current_date):
+        """자정을 넘어갔는지 확인합니다."""
+        # 단순하고 명확한 조건: 과거 날짜에서 현재 날짜로 변경되었는지
+        if self.selected_date < current_date:
+            print(f"자정을 넘어갔습니다: {self.selected_date} → {current_date}")
+            return True
+        return False
+
+    def _handle_midnight_crossing(self, current_date):
+        """자정을 넘어간 경우의 처리를 담당합니다."""
+        print(f"자정을 넘어갔습니다: {self.selected_date} → {current_date}")
+
+        # 이전 날짜의 미완료 작업 확인
+        previous_date = self.selected_date
+        incomplete_tasks = self._get_incomplete_tasks_from_date(previous_date)
+
+        # 데이터 저장 및 오늘 날짜로 변경
+        self._perform_day_change(current_date)
+
+        # 미완료 작업이 있는 경우 팝업 표시
+        if incomplete_tasks:
+            self._show_incomplete_tasks_popup(previous_date, incomplete_tasks)
+
+        # 날짜 변경 완료 로그
+        print(f"날짜 변경 완료: {current_date}")
+
+    def _perform_day_change(self, new_date):
+        """날짜 변경을 수행합니다."""
+        # 현재 데이터 저장
         self._save_data()
-        self.selected_date = datetime.now().date()
-        self.today_stats = collections.defaultdict(int)
-        self._load_today_stats()
-        self.today_tasks = collections.OrderedDict()  # Clear today_tasks on day change
-        self._load_today_tasks()  # Load new day's tasks
+
+        # 새 날짜로 설정
+        self.selected_date = new_date
+
+        # 통계 및 작업 데이터 초기화
+        self._reset_daily_data()
+
+        # UI 업데이트
         self._update_date_view()
+
+    def _reset_daily_data(self):
+        """일일 데이터를 초기화합니다."""
+        self.today_stats = collections.defaultdict(int)
+        self.today_tasks = collections.OrderedDict()
+
+        # 새 날짜의 데이터 로드
+        self._load_today_stats()
+        self._load_today_tasks()
+
+    def _get_incomplete_tasks_from_date(self, date):
+        """지정된 날짜의 미완료 작업 목록을 반환합니다."""
+        incomplete_tasks = []
+        try:
+            date_str = date.strftime("%Y-%m-%d")
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "SELECT id, name, start_time, end_time, status FROM tasks WHERE task_date = ? AND status != 'completed'",
+                (date_str,),
+            )
+
+            tasks_data = cursor.fetchall()
+            for row in tasks_data:
+                task_id, name, start_t_str, end_t_str, status = row
+                incomplete_tasks.append(
+                    {
+                        "id": task_id,
+                        "name": name,
+                        "start_time": datetime.strptime(start_t_str, "%H:%M:%S").time(),
+                        "end_time": datetime.strptime(end_t_str, "%H:%M:%S").time(),
+                        "status": status,
+                    }
+                )
+
+            conn.close()
+        except Exception as e:
+            print(f"미완료 작업 조회 오류: {e}")
+
+        return incomplete_tasks
+
+    def _show_incomplete_tasks_popup(self, previous_date, incomplete_tasks):
+        """미완료 작업을 오늘로 이전할지 묻는 팝업을 표시합니다."""
+        popup = tk.Toplevel(self.root)
+        popup.title("미완료 작업 이전")
+        popup.geometry("400x300")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        # 팝업 내용
+        content_frame = ttk.Frame(popup, padding="20")
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 제목
+        title_label = ttk.Label(
+            content_frame,
+            text=f"📅 {previous_date.strftime('%Y-%m-%d')}의 미완료 작업",
+            font=("Arial", 12, "bold"),
+        )
+        title_label.pack(pady=(0, 15))
+
+        # 설명
+        desc_label = ttk.Label(
+            content_frame,
+            text=f"총 {len(incomplete_tasks)}개의 미완료 작업이 있습니다.\n오늘로 이전하시겠습니까?",
+            font=("Arial", 10),
+        )
+        desc_label.pack(pady=(0, 20))
+
+        # 작업 목록 (스크롤 가능)
+        list_frame = ttk.Frame(content_frame)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+
+        # 스크롤바가 있는 텍스트 위젯
+        text_widget = tk.Text(list_frame, height=8, width=50, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(
+            list_frame, orient="vertical", command=text_widget.yview
+        )
+        text_widget.configure(yscrollcommand=scrollbar.set)
+
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 작업 목록 표시
+        for i, task in enumerate(incomplete_tasks, 1):
+            status_emoji = "⏰" if task["status"] == "pending" else "⚠️"
+            task_text = f"{i}. {status_emoji} {task['name']} ({task['start_time'].strftime('%H:%M')} - {task['end_time'].strftime('%H:%M')})\n"
+            text_widget.insert(tk.END, task_text)
+
+        text_widget.config(state=tk.DISABLED)  # 읽기 전용
+
+        # 버튼 프레임
+        button_frame = ttk.Frame(content_frame)
+        button_frame.pack(fill=tk.X, pady=(0, 10))
+
+        def transfer_tasks():
+            """작업을 오늘로 이전합니다."""
+            try:
+                self._transfer_incomplete_tasks_to_today(
+                    previous_date, incomplete_tasks
+                )
+                messagebox.showinfo("완료", "미완료 작업이 오늘로 이전되었습니다.")
+                popup.destroy()
+                # UI 새로고침
+                self._update_date_view()
+            except Exception as e:
+                messagebox.showerror("오류", f"작업 이전 중 오류가 발생했습니다: {e}")
+
+        def skip_transfer():
+            """작업 이전을 건너뜁니다."""
+            popup.destroy()
+
+        # 버튼들
+        ttk.Button(
+            button_frame,
+            text="✅ 이전하기",
+            command=transfer_tasks,
+            style="Accent.TButton",
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        ttk.Button(button_frame, text="❌ 건너뛰기", command=skip_transfer).pack(
+            side=tk.LEFT
+        )
+
+        # 창 중앙 정렬
+        popup.update_idletasks()
+        x = (popup.winfo_screenwidth() // 2) - (popup.winfo_width() // 2)
+        y = (popup.winfo_screenheight() // 2) - (popup.winfo_height() // 2)
+        popup.geometry(f"+{x}+{y}")
+
+        # 팝업을 최상위로 표시
+        popup.lift()
+        popup.focus_force()
+
+    def _transfer_incomplete_tasks_to_today(self, previous_date, incomplete_tasks):
+        """미완료 작업을 오늘 날짜로 이전합니다."""
+        try:
+            today_str = datetime.now().date().strftime("%Y-%m-%d")
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            for task in incomplete_tasks:
+                # 기존 작업을 오늘 날짜로 복사
+                cursor.execute(
+                    "INSERT INTO tasks (id, task_date, name, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        self.next_task_id,
+                        today_str,
+                        task["name"],
+                        task["start_time"].strftime("%H:%M:%S"),
+                        task["end_time"].strftime("%H:%M:%S"),
+                        "pending",  # 상태를 pending으로 초기화
+                    ),
+                )
+                self.next_task_id += 1
+
+            conn.commit()
+            conn.close()
+
+            # 오늘 작업 목록 새로고침
+            self._load_today_tasks()
+
+        except Exception as e:
+            print(f"작업 이전 오류: {e}")
+            raise
 
     def _check_and_update_task_statuses(self):
         now_dt = datetime.now()
@@ -4430,6 +4684,31 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             messagebox.showerror(
                 "오류", f"데이터 삭제 중 오류가 발생했습니다:\n{str(e)}"
             )
+
+    # ========================================
+    # 🚨 DELETE_BEFORE_DEPLOY: 테스트 메서드 시작
+    # ========================================
+    def _test_midnight_crossing(self):
+        """테스트용: 자정을 넘어가는 상황을 시뮬레이션합니다."""
+        print("=== 자정 넘어감 테스트 시작 ===")
+
+        # 현재 선택된 날짜를 어제로 설정
+        yesterday = datetime.now().date() - timedelta(days=1)
+        self.selected_date = yesterday
+        print(f"테스트: 선택된 날짜를 {yesterday}로 설정")
+
+        # 오늘 날짜로 강제 변경 시뮬레이션
+        today = datetime.now().date()
+        print(f"테스트: 오늘 날짜 {today}로 변경 시뮬레이션")
+
+        # 자정 넘어감 처리 실행
+        self._handle_midnight_crossing(today)
+
+        print("=== 자정 넘어감 테스트 완료 ===")
+
+    # ========================================
+    # 🚨 DELETE_BEFORE_DEPLOY: 테스트 메서드 끝
+    # ========================================s
 
 
 if __name__ == "__main__":
