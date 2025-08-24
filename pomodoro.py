@@ -1282,6 +1282,9 @@ class PomodoroPlannerApp:
         self.seconds_left = self.work_duration
         self.pause_seconds_left = self.pause_duration
         self.alarm_on = False
+        
+        # 사용자 수동 날짜 변경 추적
+        self.user_manually_changed_date = False
         self._alarm_after_id = None
 
         # 소리 설정 변수들
@@ -1557,88 +1560,132 @@ class PomodoroPlannerApp:
         self.loading_animation.hide()
 
     def _load_data_for_selected_date(self):
-        # 로딩 애니메이션 표시
-        self.loading_animation.show()
-        self.root.update()
-
+        """선택된 날짜의 데이터를 로드하고 UI를 업데이트합니다."""
         try:
+            # 로딩 애니메이션 표시
+            self.loading_animation.show()
+            self.root.update()
+
             # Clear current task list widgets from UI
             for widget in self.task_list_frame.winfo_children():
                 widget.destroy()
-
-            # NEW: Reset widget references for all tasks in today_tasks
+            
+            # Reset widget references for all tasks in today_tasks
             # This ensures that if we return to today, widgets are recreated.
             for task in self.today_tasks.values():
-                task["widgets"] = {}
+                task['widgets'] = {}
 
             date_str = self.selected_date.strftime("%Y-%m-%d")
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            is_today = self.selected_date == datetime.now().date()
+            is_today = (self.selected_date == datetime.now().date())
 
             if is_today:
-                self.displayed_tasks_data = self.today_tasks
-                self.displayed_stats = self.today_stats
-            else:
-                # Load historical tasks for the selected date
-                self.displayed_tasks_data = collections.OrderedDict()
+                # 오늘 날짜: 데이터베이스에서 최신 데이터를 로드하여 메모리 업데이트
+                print("오늘 날짜 - 데이터베이스에서 최신 데이터 로드 중...")
+                
+                # today_tasks를 데이터베이스에서 새로 로드
+                self.today_tasks.clear()
                 cursor.execute(
                     "SELECT id, name, start_time, end_time, status FROM tasks WHERE task_date = ?",
                     (date_str,),
                 )
                 tasks_data = cursor.fetchall()
+                print(f"데이터베이스에서 오늘 작업 조회: {len(tasks_data)}개")
+                
+                for row in tasks_data:
+                    task_id, name, start_t_str, end_t_str, status = row
+                    self.today_tasks[task_id] = {
+                        "name": name,
+                        "start_time": datetime.strptime(start_t_str, '%H:%M:%S').time(),
+                        "end_time": datetime.strptime(end_t_str, '%H:%M:%S').time(),
+                        "is_complete": tk.BooleanVar(value=(status != 'pending')),
+                        "status": status,
+                        "delay_info": None,
+                        "widgets": {}
+                    }
+                
+                # today_stats를 데이터베이스에서 새로 로드
+                cursor.execute("SELECT * FROM daily_summary WHERE date = ?", (date_str,))
+                stats_data = cursor.fetchone()
+                if stats_data:
+                    self.today_stats['completed_pomodoros'] = stats_data[1]
+                    self.today_stats['success'] = stats_data[2]
+                    self.today_stats['failure'] = stats_data[3]
+                    self.today_stats['total_focus_seconds'] = stats_data[4]
+                    print(f"오늘 통계 데이터 로드: 완료={stats_data[1]}, 성공={stats_data[2]}, 실패={stats_data[3]}, 집중시간={stats_data[4]}초")
+                else:
+                    print("오늘 통계 데이터 없음")
+                
+                # 메모리 데이터를 displayed 데이터에 할당
+                self.displayed_tasks_data = self.today_tasks
+                self.displayed_stats = self.today_stats
+                print(f"오늘 날짜 데이터 로드 완료: {len(self.today_tasks)}개 작업")
+                
+                # 어제의 미완료 작업 확인 및 이전 제안
+                self._check_and_suggest_task_transfer()
+            else:
+                # 과거 날짜: 데이터베이스에서 조회
+                self.displayed_tasks_data = collections.OrderedDict()
+                
+                # 작업 데이터 로드
+                cursor.execute("SELECT id, name, start_time, end_time, status FROM tasks WHERE task_date = ?", (date_str,))
+                tasks_data = cursor.fetchall()
+                print(f"과거 날짜 {date_str} 작업 데이터 조회: {len(tasks_data)}개")
+                
                 for row in tasks_data:
                     task_id, name, start_t_str, end_t_str, status = row
                     self.displayed_tasks_data[task_id] = {
                         "name": name,
-                        "start_time": datetime.strptime(start_t_str, "%H:%M:%S").time(),
-                        "end_time": datetime.strptime(end_t_str, "%H:%M:%S").time(),
-                        "is_complete": tk.BooleanVar(value=(status != "pending")),
+                        "start_time": datetime.strptime(start_t_str, '%H:%M:%S').time(),
+                        "end_time": datetime.strptime(end_t_str, '%H:%M:%S').time(),
+                        "is_complete": tk.BooleanVar(value=(status != 'pending')),
                         "status": status,
-                        "delay_info": None,
-                        "widgets": {},
+                        "delay_info": None, 
+                        "widgets": {} 
                     }
-
-                # Load historical stats for the selected date
+                
+                # 통계 데이터 로드
                 self.displayed_stats = collections.defaultdict(int)
-                cursor.execute(
-                    "SELECT * FROM daily_summary WHERE date = ?", (date_str,)
-                )
+                cursor.execute("SELECT * FROM daily_summary WHERE date = ?", (date_str,))
                 stats_data = cursor.fetchone()
                 if stats_data:
-                    self.displayed_stats["completed_pomodoros"] = stats_data[1]
-                    self.displayed_stats["success"] = stats_data[2]
-                    self.displayed_stats["failure"] = stats_data[3]
-                    self.displayed_stats["total_focus_seconds"] = stats_data[4]
-
-            # Now, populate UI based on self.displayed_tasks_data
+                    self.displayed_stats['completed_pomodoros'] = stats_data[1]
+                    self.displayed_stats['success'] = stats_data[2]
+                    self.displayed_stats['failure'] = stats_data[3]
+                    self.displayed_stats['total_focus_seconds'] = stats_data[4]
+                    print(f"과거 날짜 {date_str} 통계 데이터 로드: 완료={stats_data[1]}, 성공={stats_data[2]}, 실패={stats_data[3]}, 집중시간={stats_data[4]}초")
+                else:
+                    print(f"과거 날짜 {date_str} 통계 데이터 없음")
+            
+            # UI 업데이트
+            print(f"UI 업데이트 시작: {len(self.displayed_tasks_data)}개 작업")
             for task_id, task in self.displayed_tasks_data.items():
+                print(f"작업 UI 생성 호출: task_id={task_id}, name='{task['name']}'")
                 self._create_task_list_item(task_id)
-
-            # Update task_id_counter based on the currently displayed tasks (legacy counter, kept for UI logic)
-            self.task_id_counter = (
-                max(self.displayed_tasks_data.keys()) + 1
-                if self.displayed_tasks_data
-                else 0
-            )
-            # Also ensure global next_task_id never goes backwards
+                
+            # task_id_counter 업데이트
+            self.task_id_counter = max(self.displayed_tasks_data.keys()) + 1 if self.displayed_tasks_data else 0
             if self.displayed_tasks_data:
-                self.next_task_id = max(
-                    self.next_task_id, max(self.displayed_tasks_data.keys()) + 1
-                )
-
+                self.next_task_id = max(self.next_task_id, max(self.displayed_tasks_data.keys()) + 1)
+            
+            # 캘린더 및 통계 업데이트
             self._draw_tasks_on_calendar()
-            conn.close()
             self._update_stats_display()
-            # 스크롤 영역 업데이트
             self._update_task_scroll_region()
-
+            
+            conn.close()
+            
             # 로딩 완료 후 애니메이션 숨기기
             self.root.after(500, self.loading_animation.hide)
+            
+            print(f"데이터 로드 완료: {date_str}, 작업 {len(self.displayed_tasks_data)}개")
 
         except Exception as e:
             print(f"데이터 로드 오류: {e}")
+            import traceback
+            traceback.print_exc()
             self.loading_animation.hide()
 
     def _save_data(self):
@@ -1923,11 +1970,17 @@ class PomodoroPlannerApp:
         self.calendar_canvas.bind("<B1-Motion>", self._on_calendar_scroll_drag)
 
     def _go_to_previous_day(self):
+        # 사용자 수동 날짜 변경 플래그 설정
+        self.user_manually_changed_date = True
+        
         self.selected_date -= timedelta(days=1)
         self._update_date_view()
 
     def _go_to_next_day(self):
         if self.selected_date < datetime.now().date():
+            # 사용자 수동 날짜 변경 플래그 설정
+            self.user_manually_changed_date = True
+            
             self.selected_date += timedelta(days=1)
             self._update_date_view()
         else:
@@ -1956,6 +2009,9 @@ class PomodoroPlannerApp:
             try:
                 new_date = datetime.strptime(selected, "%Y-%m-%d").date()
                 if new_date <= datetime.now().date():
+                    # 사용자 수동 날짜 변경 플래그 설정
+                    self.user_manually_changed_date = True
+                    
                     self.selected_date = new_date
                     self._update_date_view()
                     popup.destroy()
@@ -1984,21 +2040,26 @@ class PomodoroPlannerApp:
         date_text = self.selected_date.strftime("%Y-%m-%d")
         is_today = self.selected_date == datetime.now().date()
 
+        print(f"=== 날짜 변경: {date_text} (오늘: {is_today}) ===")
+
         if is_today:
             date_text += " (오늘)"
-            self.displayed_stats = self.today_stats
             self.stats_frame.config(text="통계 (오늘)")
+            print("오늘 날짜로 설정 - 데이터베이스에서 최신 데이터 로드 예정")
         else:
             self.stats_frame.config(
                 text=f"통계 ({self.selected_date.strftime('%Y-%m-%d')})"
             )
+            print(f"과거 날짜로 설정 - 데이터베이스에서 로드 예정")
 
         self.date_button.config(text=date_text)
 
         self.next_day_button.config(state=tk.NORMAL if not is_today else tk.DISABLED)
         self.add_task_button.config(state=tk.NORMAL if is_today else tk.DISABLED)
 
+        print("데이터 로드 시작...")
         self._load_data_for_selected_date()
+        print("=== 날짜 변경 완료 ===")
 
     def _open_settings_window(self):
         """설정 창을 엽니다."""
@@ -2078,6 +2139,24 @@ class PomodoroPlannerApp:
             style="Accent.TButton",
         )
         test_button.pack(pady=5)
+        
+        # 더미 데이터 생성 테스트 버튼
+        dummy_data_button = ttk.Button(
+            test_frame,
+            text="📊 더미 데이터 생성 (테스트용)",
+            command=self._create_dummy_data_for_testing,
+            style="Accent.TButton",
+        )
+        dummy_data_button.pack(pady=5)
+        
+        # 데이터베이스 상태 확인 버튼
+        check_db_button = ttk.Button(
+            test_frame,
+            text="🔍 데이터베이스 상태 확인",
+            command=self._check_database_status,
+            style="Accent.TButton",
+        )
+        check_db_button.pack(pady=5)
         # ========================================
         # 🚨 DELETE_BEFORE_DEPLOY: 테스트 UI 끝
         # ========================================
@@ -3734,7 +3813,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             task_id
         )  # Get task from displayed_tasks_data
         if not task:
+            print(f"경고: task_id {task_id}에 대한 작업 데이터를 찾을 수 없습니다.")
             return
+        
+        print(f"작업 UI 생성 중: task_id={task_id}, name='{task['name']}'")
 
         task_frame = ttk.Frame(self.task_list_frame)
         task_frame.pack(fill=tk.X, pady=2)
@@ -3818,7 +3900,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             task_id
         )  # Get task from displayed_tasks_data
         if not task:
+            print(f"경고: _update_task_list_item_display에서 task_id {task_id}에 대한 작업 데이터를 찾을 수 없습니다.")
             return
+        
+        print(f"작업 UI 업데이트 중: task_id={task_id}, name='{task['name']}', status='{task['status']}'")
 
         now = datetime.now()
         remaining_text = ""
@@ -3879,7 +3964,12 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
 
         self._update_timer_display()
         self._update_current_time_indicator()
-        self._timer_id = self.root.after(1000, self._update_clocks)
+        
+        # 다음 타이머 호출 예약 (기존 타이머 ID 재사용)
+        if self.pomodoro_state != "stopped":
+            self._timer_id = self.root.after(1000, self._update_clocks)
+        else:
+            self._timer_id = None
 
     def _adjust_ui_for_window_size(self):
         """창 크기에 따라 UI 모드를 조정합니다."""
@@ -3956,16 +4046,37 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
 
     def _check_and_handle_day_change(self):
         """자정을 넘어가는 날짜 변경을 감지하고 처리합니다."""
-        current_date = datetime.now().date()
+        # 자정 근처에서만 체크 (23:59 ~ 00:01)
+        now = datetime.now()
+        current_hour = now.hour
+        current_minute = now.minute
+        
+        # 자정 전후 1분 이내에서만 체크
+        if not ((current_hour == 23 and current_minute >= 59) or 
+                (current_hour == 0 and current_minute <= 1)):
+            return
+            
+        current_date = now.date()
 
         # 자정을 넘어간 경우에만 처리
         if self._is_midnight_crossed(current_date):
             self._handle_midnight_crossing(current_date)
+        
+        # 자정이 지나면 사용자 수동 변경 플래그 자동 리셋
+        if current_hour == 0 and current_minute == 1:
+            if self.user_manually_changed_date:
+                print("자정이 지나 사용자 수동 날짜 변경 플래그를 자동으로 리셋합니다.")
+                self.user_manually_changed_date = False
 
     def _is_midnight_crossed(self, current_date):
         """자정을 넘어갔는지 확인합니다."""
-        # 단순하고 명확한 조건: 과거 날짜에서 현재 날짜로 변경되었는지
-        if self.selected_date < current_date:
+        # 사용자가 수동으로 날짜를 변경한 경우는 자동 날짜 변경을 하지 않음
+        if self.user_manually_changed_date:
+            return False
+        
+        # 현재 선택된 날짜가 어제이고, 실제 현재 날짜가 오늘인 경우만 자정 넘어감으로 간주
+        yesterday = current_date - timedelta(days=1)
+        if self.selected_date == yesterday and current_date > yesterday:
             print(f"자정을 넘어갔습니다: {self.selected_date} → {current_date}")
             return True
         return False
@@ -3985,6 +4096,9 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         if incomplete_tasks:
             self._show_incomplete_tasks_popup(previous_date, incomplete_tasks)
 
+        # 자동 날짜 변경 후 플래그 리셋
+        self.user_manually_changed_date = False
+
         # 날짜 변경 완료 로그
         print(f"날짜 변경 완료: {current_date}")
 
@@ -4001,6 +4115,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
 
         # UI 업데이트
         self._update_date_view()
+        
+        # 타이머가 계속 작동하도록 보장
+        if not self._timer_id:
+            self._start_timer()
 
     def _reset_daily_data(self):
         """일일 데이터를 초기화합니다."""
@@ -4020,7 +4138,7 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             cursor = conn.cursor()
 
             cursor.execute(
-                "SELECT id, name, start_time, end_time, status FROM tasks WHERE task_date = ? AND status != 'completed'",
+                "SELECT id, name, start_time, end_time, status FROM tasks WHERE task_date = ? AND status = 'pending'",
                 (date_str,),
             )
 
@@ -4223,6 +4341,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         # The button will be handled by _update_pomodoro_button
         self._update_pomodoro_button()
         self._update_timer_display()
+        
+        # 타이머가 계속 작동하도록 보장
+        if not self._timer_id:
+            self._start_timer()
 
     def _reset_pomodoro(self):
         # 알람이 울리고 있는 상태에서 리셋 시 실패 처리
@@ -4273,6 +4395,9 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         if self.selected_date == datetime.now().date():
             self._update_stats_display()
         self._save_data()
+        
+        # 타이머 재시작
+        self._start_timer()
 
     def _handle_session_end(self):
         self._play_notification_sound()
@@ -4297,6 +4422,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         if self.selected_date == datetime.now().date():
             self._update_stats_display()
         self._save_data()
+        
+        # 타이머가 계속 작동하도록 보장
+        if not self._timer_id:
+            self._start_timer()
 
     def _update_timer_display(self):
         if self.pomodoro_state == "paused":
@@ -4389,8 +4518,15 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         self.stats_labels["streak"].config(text=streak_text)
 
     def _start_timer(self):
+        """타이머를 시작합니다."""
         if not self._timer_id:
-            self._update_clocks()
+            self._timer_id = self.root.after(1000, self._update_clocks)
+
+    def _stop_timer(self):
+        """타이머를 중지합니다."""
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+            self._timer_id = None
 
     def _quit_app(self):
         self._save_data()
@@ -4399,8 +4535,7 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             "정말로 Juns Enterprise Pomodoro Suite를 종료하시겠습니까?\n\n"
             "진행 중인 작업과 통계가 자동으로 저장됩니다.",
         ):
-            if self._timer_id:
-                self.root.after_cancel(self._timer_id)
+            self._stop_timer()
             print(
                 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -4708,7 +4843,163 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
 
     # ========================================
     # 🚨 DELETE_BEFORE_DEPLOY: 테스트 메서드 끝
-    # ========================================s
+    # ========================================
+    
+    def _create_dummy_data_for_testing(self):
+        """테스트를 위한 더미 데이터를 생성합니다."""
+        try:
+            # 어제 날짜 계산
+            yesterday = datetime.now().date() - timedelta(days=1)
+            yesterday_str = yesterday.strftime("%Y-%m-%d")
+            
+            # 3일 전 날짜 계산
+            three_days_ago = datetime.now().date() - timedelta(days=3)
+            three_days_ago_str = three_days_ago.strftime("%Y-%m-%d")
+            
+            # 1주일 전 날짜 계산
+            week_ago = datetime.now().date() - timedelta(days=7)
+            week_ago_str = week_ago.strftime("%Y-%m-%d")
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # 더미 작업 데이터 생성
+            dummy_tasks = [
+                # 어제 작업
+                (yesterday_str, "어제 완료된 작업", "09:00:00", "10:00:00", "on-time"),
+                (yesterday_str, "어제 지연된 작업", "14:00:00", "16:00:00", "delayed"),
+                (yesterday_str, "어제 실패한 작업", "20:00:00", "21:00:00", "failed"),
+                
+                # 3일 전 작업
+                (three_days_ago_str, "3일 전 집중 작업", "08:00:00", "12:00:00", "on-time"),
+                (three_days_ago_str, "3일 전 팀 미팅", "14:00:00", "15:00:00", "on-time"),
+                
+                # 1주일 전 작업
+                (week_ago_str, "1주일 전 프로젝트 계획", "09:00:00", "11:00:00", "on-time"),
+                (week_ago_str, "1주일 전 코드 리뷰", "15:00:00", "17:00:00", "delayed"),
+            ]
+            
+            # 더미 통계 데이터 생성
+            dummy_stats = [
+                (yesterday_str, 4, 3, 1, 7200),      # 어제: 4개 완료, 3성공, 1실패, 2시간 집중
+                (three_days_ago_str, 6, 5, 1, 10800), # 3일 전: 6개 완료, 5성공, 1실패, 3시간 집중
+                (week_ago_str, 3, 2, 1, 5400),        # 1주일 전: 3개 완료, 2성공, 1실패, 1.5시간 집중
+            ]
+            
+            # 기존 데이터 삭제 (테스트용)
+            cursor.execute("DELETE FROM tasks WHERE task_date IN (?, ?, ?)", 
+                         (yesterday_str, three_days_ago_str, week_ago_str))
+            cursor.execute("DELETE FROM daily_summary WHERE date IN (?, ?, ?)", 
+                         (yesterday_str, three_days_ago_str, week_ago_str))
+            
+            # 더미 작업 데이터 삽입
+            for task_date, name, start_time, end_time, status in dummy_tasks:
+                cursor.execute(
+                    "INSERT INTO tasks (task_date, name, start_time, end_time, status) VALUES (?, ?, ?, ?, ?)",
+                    (task_date, name, start_time, end_time, status)
+                )
+            
+            # 더미 통계 데이터 삽입
+            for date, completed, success, failure, focus_seconds in dummy_stats:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO daily_summary VALUES (?, ?, ?, ?, ?)",
+                    (date, completed, success, failure, focus_seconds)
+                )
+            
+            conn.commit()
+            conn.close()
+            
+            messagebox.showinfo(
+                "더미 데이터 생성 완료",
+                f"테스트용 더미 데이터가 생성되었습니다:\n\n"
+                f"📅 {yesterday_str}: 3개 작업, 2시간 집중\n"
+                f"📅 {three_days_ago_str}: 2개 작업, 3시간 집중\n"
+                f"📅 {week_ago_str}: 2개 작업, 1.5시간 집중\n\n"
+                f"이제 달력에서 해당 날짜를 선택하여 불러오기를 테스트할 수 있습니다!"
+            )
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"더미 데이터 생성 중 오류가 발생했습니다:\n{str(e)}")
+    
+    def _check_database_status(self):
+        """데이터베이스 상태를 확인하고 현재 상황을 출력합니다."""
+        try:
+            print("\n=== 데이터베이스 상태 확인 ===")
+            
+            # 현재 선택된 날짜 정보
+            print(f"현재 선택된 날짜: {self.selected_date}")
+            print(f"오늘 날짜: {datetime.now().date()}")
+            print(f"오늘인가?: {self.selected_date == datetime.now().date()}")
+            
+            # 메모리 데이터 상태
+            print(f"today_tasks 개수: {len(self.today_tasks)}")
+            print(f"today_stats: {dict(self.today_stats)}")
+            print(f"displayed_tasks_data 개수: {len(self.displayed_tasks_data)}")
+            print(f"displayed_stats: {dict(self.displayed_stats)}")
+            
+            # 데이터베이스 상태 확인
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # 테이블별 레코드 수 확인
+            cursor.execute("SELECT COUNT(*) FROM tasks")
+            tasks_count = cursor.fetchone()[0]
+            print(f"데이터베이스 tasks 테이블 레코드 수: {tasks_count}")
+            
+            cursor.execute("SELECT COUNT(*) FROM daily_summary")
+            summary_count = cursor.fetchone()[0]
+            print(f"데이터베이스 daily_summary 테이블 레코드 수: {summary_count}")
+            
+            # 날짜별 작업 수 확인
+            cursor.execute("SELECT task_date, COUNT(*) FROM tasks GROUP BY task_date ORDER BY task_date DESC LIMIT 10")
+            date_counts = cursor.fetchall()
+            print("최근 10일 작업 수:")
+            for date, count in date_counts:
+                print(f"  {date}: {count}개")
+            
+            # 현재 선택된 날짜의 데이터 확인
+            selected_date_str = self.selected_date.strftime("%Y-%m-%d")
+            cursor.execute("SELECT COUNT(*) FROM tasks WHERE task_date = ?", (selected_date_str,))
+            selected_date_tasks = cursor.fetchone()[0]
+            print(f"선택된 날짜 {selected_date_str}의 작업 수: {selected_date_tasks}개")
+            
+            cursor.execute("SELECT * FROM daily_summary WHERE date = ?", (selected_date_str,))
+            selected_date_stats = cursor.fetchone()
+            if selected_date_stats:
+                print(f"선택된 날짜 {selected_date_str}의 통계: {selected_date_stats}")
+            else:
+                print(f"선택된 날짜 {selected_date_str}의 통계: 없음")
+            
+            conn.close()
+            print("=== 데이터베이스 상태 확인 완료 ===\n")
+            
+        except Exception as e:
+            print(f"데이터베이스 상태 확인 오류: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _check_and_suggest_task_transfer(self):
+        """어제의 미완료 작업을 확인하고 오늘로 이전할지 제안합니다."""
+        try:
+            # 어제 날짜 계산
+            yesterday = datetime.now().date() - timedelta(days=1)
+            yesterday_str = yesterday.strftime("%Y-%m-%d")
+            
+            # 어제의 미완료 작업 조회
+            incomplete_tasks = self._get_incomplete_tasks_from_date(yesterday)
+            
+            if incomplete_tasks:
+                print(f"어제({yesterday_str})의 미완료 작업 {len(incomplete_tasks)}개 발견")
+                
+                # 사용자에게 이전할지 묻는 팝업 표시
+                self._show_incomplete_tasks_popup(yesterday, incomplete_tasks)
+            else:
+                print(f"어제({yesterday_str})의 미완료 작업 없음")
+                
+        except Exception as e:
+            print(f"작업 이전 확인 중 오류: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
