@@ -1286,6 +1286,10 @@ class PomodoroPlannerApp:
         # 사용자 수동 날짜 변경 추적
         self.user_manually_changed_date = False
         self._alarm_after_id = None
+        
+        # 작업 이전 관련 플래그 추가
+        self.last_transfer_suggested_date = None  # 마지막으로 이전 제안한 날짜
+        self.transfer_suggested_today = False  # 오늘 이미 이전 제안했는지 여부
 
         # 소리 설정 변수들
         self.sound_type = tk.StringVar(value="custom")
@@ -1569,7 +1573,7 @@ class PomodoroPlannerApp:
             # Clear current task list widgets from UI
             for widget in self.task_list_frame.winfo_children():
                 widget.destroy()
-            
+
             # Reset widget references for all tasks in today_tasks
             # This ensures that if we return to today, widgets are recreated.
             for task in self.today_tasks.values():
@@ -1623,7 +1627,7 @@ class PomodoroPlannerApp:
                 self.displayed_stats = self.today_stats
                 print(f"오늘 날짜 데이터 로드 완료: {len(self.today_tasks)}개 작업")
                 
-                # 어제의 미완료 작업 확인 및 이전 제안
+                # 어제의 미완료 작업 확인 및 이전 제안 (수동 날짜 변경 시에도 작동)
                 self._check_and_suggest_task_transfer()
             else:
                 # 과거 날짜: 데이터베이스에서 조회
@@ -1642,10 +1646,10 @@ class PomodoroPlannerApp:
                         "end_time": datetime.strptime(end_t_str, '%H:%M:%S').time(),
                         "is_complete": tk.BooleanVar(value=(status != 'pending')),
                         "status": status,
-                        "delay_info": None, 
+                        "delay_info": None,
                         "widgets": {} 
                     }
-                
+
                 # 통계 데이터 로드
                 self.displayed_stats = collections.defaultdict(int)
                 cursor.execute("SELECT * FROM daily_summary WHERE date = ?", (date_str,))
@@ -1664,19 +1668,19 @@ class PomodoroPlannerApp:
             for task_id, task in self.displayed_tasks_data.items():
                 print(f"작업 UI 생성 호출: task_id={task_id}, name='{task['name']}'")
                 self._create_task_list_item(task_id)
-                
+
             # task_id_counter 업데이트
             self.task_id_counter = max(self.displayed_tasks_data.keys()) + 1 if self.displayed_tasks_data else 0
             if self.displayed_tasks_data:
                 self.next_task_id = max(self.next_task_id, max(self.displayed_tasks_data.keys()) + 1)
-            
+
             # 캘린더 및 통계 업데이트
             self._draw_tasks_on_calendar()
             self._update_stats_display()
             self._update_task_scroll_region()
             
             conn.close()
-            
+
             # 로딩 완료 후 애니메이션 숨기기
             self.root.after(500, self.loading_animation.hide)
             
@@ -4098,6 +4102,10 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
 
         # 자동 날짜 변경 후 플래그 리셋
         self.user_manually_changed_date = False
+        
+        # 작업 이전 관련 플래그 리셋 (새로운 날짜가 시작되므로)
+        self.transfer_suggested_today = False
+        self.last_transfer_suggested_date = None
 
         # 날짜 변경 완료 로그
         print(f"날짜 변경 완료: {current_date}")
@@ -4117,7 +4125,7 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
         self._update_date_view()
         
         # 타이머가 계속 작동하도록 보장
-        if not self._timer_id:
+        if self.pomodoro_state != "stopped":
             self._start_timer()
 
     def _reset_daily_data(self):
@@ -4137,6 +4145,7 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
+            # pending 상태인 작업만 미완료로 간주
             cursor.execute(
                 "SELECT id, name, start_time, end_time, status FROM tasks WHERE task_date = ? AND status = 'pending'",
                 (date_str,),
@@ -4260,27 +4269,42 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             today_str = datetime.now().date().strftime("%Y-%m-%d")
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-
+            
+            # 이미 이전된 작업인지 확인
+            transferred_count = 0
             for task in incomplete_tasks:
-                # 기존 작업을 오늘 날짜로 복사
+                # 동일한 이름과 시간의 작업이 오늘 이미 존재하는지 확인
                 cursor.execute(
-                    "INSERT INTO tasks (id, task_date, name, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        self.next_task_id,
-                        today_str,
-                        task["name"],
-                        task["start_time"].strftime("%H:%M:%S"),
-                        task["end_time"].strftime("%H:%M:%S"),
-                        "pending",  # 상태를 pending으로 초기화
-                    ),
+                    "SELECT COUNT(*) FROM tasks WHERE task_date = ? AND name = ? AND start_time = ? AND end_time = ?",
+                    (today_str, task["name"], task["start_time"].strftime("%H:%M:%S"), task["end_time"].strftime("%H:%M:%S"))
                 )
-                self.next_task_id += 1
+                
+                if cursor.fetchone()[0] == 0:  # 중복되지 않는 경우에만 이전
+                    cursor.execute(
+                        "INSERT INTO tasks (id, task_date, name, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?)",
+                        (
+                            self.next_task_id,
+                            today_str,
+                            task["name"],
+                            task["start_time"].strftime("%H:%M:%S"),
+                            task["end_time"].strftime("%H:%M:%S"),
+                            "pending",  # 상태를 pending으로 초기화
+                        ),
+                    )
+                    self.next_task_id += 1
+                    transferred_count += 1
+                else:
+                    print(f"작업 '{task['name']}'은 이미 오늘 날짜에 존재합니다. 건너뜁니다.")
 
             conn.commit()
             conn.close()
-
-            # 오늘 작업 목록 새로고침
-            self._load_today_tasks()
+            
+            if transferred_count > 0:
+                print(f"{transferred_count}개의 작업이 성공적으로 이전되었습니다.")
+                # 오늘 작업 목록 새로고침
+                self._load_today_tasks()
+            else:
+                print("이전할 새로운 작업이 없습니다.")
 
         except Exception as e:
             print(f"작업 이전 오류: {e}")
@@ -4979,27 +5003,71 @@ AI API 연결에 실패하여 기본 분석 결과를 제공합니다.
             traceback.print_exc()
     
     def _check_and_suggest_task_transfer(self):
-        """어제의 미완료 작업을 확인하고 오늘로 이전할지 제안합니다."""
+        """가장 최근의 미완료 작업을 확인하고 오늘로 이전할지 제안합니다."""
         try:
-            # 어제 날짜 계산
-            yesterday = datetime.now().date() - timedelta(days=1)
-            yesterday_str = yesterday.strftime("%Y-%m-%d")
-            
-            # 어제의 미완료 작업 조회
-            incomplete_tasks = self._get_incomplete_tasks_from_date(yesterday)
-            
-            if incomplete_tasks:
-                print(f"어제({yesterday_str})의 미완료 작업 {len(incomplete_tasks)}개 발견")
+            # 오늘 날짜가 아니면 작업 이전 제안하지 않음
+            if self.selected_date != datetime.now().date():
+                return
                 
-                # 사용자에게 이전할지 묻는 팝업 표시
-                self._show_incomplete_tasks_popup(yesterday, incomplete_tasks)
+            # 이미 오늘 이전 제안을 했다면 다시 제안하지 않음
+            if self.transfer_suggested_today:
+                print("오늘 이미 작업 이전을 제안했음")
+                return
+                
+            # 가장 최근에 미완료 작업이 있는 날짜 찾기
+            recent_incomplete_date = self._find_recent_date_with_incomplete_tasks()
+            
+            if recent_incomplete_date:
+                # 해당 날짜의 미완료 작업 조회
+                incomplete_tasks = self._get_incomplete_tasks_from_date(recent_incomplete_date)
+                
+                if incomplete_tasks:
+                    date_str = recent_incomplete_date.strftime("%Y-%m-%d")
+                    print(f"{date_str}의 미완료 작업 {len(incomplete_tasks)}개 발견 - 이전 제안")
+                    
+                    # 사용자에게 이전할지 묻는 팝업 표시
+                    self._show_incomplete_tasks_popup(recent_incomplete_date, incomplete_tasks)
+                    
+                    # 오늘 이전 제안 완료 플래그 설정
+                    self.transfer_suggested_today = True
+                    self.last_transfer_suggested_date = recent_incomplete_date
+                else:
+                    print("미완료 작업이 있는 날짜를 찾았지만 실제 작업이 없음")
             else:
-                print(f"어제({yesterday_str})의 미완료 작업 없음")
+                print("최근에 미완료 작업이 있는 날짜가 없음")
                 
         except Exception as e:
             print(f"작업 이전 확인 중 오류: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _find_recent_date_with_incomplete_tasks(self):
+        """가장 최근에 미완료 작업이 있는 날짜를 찾습니다."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # 오늘 이전 날짜 중 pending 상태 작업이 있는 가장 최근 날짜 찾기
+            today = datetime.now().date()
+            cursor.execute("""
+                SELECT DISTINCT task_date 
+                FROM tasks 
+                WHERE task_date < ? AND status = 'pending'
+                ORDER BY task_date DESC 
+                LIMIT 1
+            """, (today.strftime("%Y-%m-%d"),))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                return datetime.strptime(result[0], "%Y-%m-%d").date()
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"최근 미완료 작업 날짜 찾기 오류: {e}")
+            return None
 
 
 if __name__ == "__main__":
